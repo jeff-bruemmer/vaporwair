@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+// buildAirNowURL creates http address for dialer to call Dark Sky API.
 func buildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, units string) string {
 	return addr +
 		apikey +
@@ -25,6 +26,7 @@ func buildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, unit
 		units
 }
 
+// buildAirNowURL creates http address for dialer to call Air Now API.
 func buildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey string) string {
 	return addr +
 		"latitude=" + c.Latitude +
@@ -54,14 +56,14 @@ func GetGeoData(addr string) (geolocation.GeoData, error) {
 
 }
 
-// GetWeatherForecast dials the Dark Sky API and returns a weather forecast.
-func GetWeatherForecast(addr string) (weather.Forecast, error) {
+// GetWeatherForecast dials the Dark Sky API and returns a weather.Forecast.
+func GetWeatherForecast(addr string) weather.Forecast {
 	var wf weather.Forecast
 	// Request coordinates from ip-api and specify timeout in seconds
 	// Set gzip bool to true.
 	resp, err := dialer.NetReq(addr, 5, true)
 	if err != nil {
-		return wf, err
+		log.Fatal(err)
 	}
 	// Unzip response
 	defer resp.Body.Close()
@@ -73,19 +75,33 @@ func GetWeatherForecast(addr string) (weather.Forecast, error) {
 	// Decode unzipped response into weather forecast.
 	defer gz.Close()
 	json.NewDecoder(gz).Decode(&wf)
-	return wf, err
+	return wf
 }
 
-// GetAirQualityForecasts dials AirNow API and returns a slice of air.Forecast.
-func GetAirQualityForecast(addr string) ([]air.Forecast, error) {
+// GetAirQualityForecast dials AirNow API and returns a slice of air.Forecast.
+func GetAirQualityForecast(addr string) []air.Forecast {
 	var af []air.Forecast
 	resp, err := dialer.NetReq(addr, 10, false)
 	if err != nil {
-		return af, err
+		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 	json.NewDecoder(resp.Body).Decode(&af)
-	return af, err
+	return af
+}
+
+// GetWeatherAndAirForecasts fires 2 goroutines to get weather and air reports,
+// and returns each in a channel. If either call fails, the program exits.
+func GetWeatherAndAirForecasts(dsURL, anURL string) (chan weather.Forecast, chan []air.Forecast) {
+	weather := make(chan weather.Forecast)
+	air := make(chan []air.Forecast)
+	go func() {
+		weather <- GetWeatherForecast(dsURL)
+	}()
+	go func() {
+		air <- GetAirQualityForecast(anURL)
+	}()
+	return weather, air
 }
 
 func main() {
@@ -126,31 +142,24 @@ func main() {
 	anURL := buildAirNowURL(dialer.AirNowAddress, coordinates, date, config.AirNowAPIKey)
 	fmt.Println(anURL)
 	// If cached forecast has expired, dial IP-API call
+
 	// If saved coordinates exist, assume user is in same location and use coordinates to:
+
 	// 1. Dial optimistic Dark Sky API
 
 	// 2. Dial optimistic AirNow
 
 	// If coordinates returned by IP-API call differ from coordinates in saved forecast,
 	// user is in a new location, and calls with the updated coordinates need to be made.
-	// 1. Dial Dark Sky API
-	wf, err := GetWeatherForecast(dsURL)
-	if err != nil {
-		log.Fatal("There was a problem obtaining the weather forecast.")
-	}
-	fmt.Println(wf)
-	// 2. Dial AirNow API
-	af, err := GetAirQualityForecast(anURL)
-	if err != nil {
-		log.Fatal("There was a problem obtaining the air quality forecast.")
-	}
-	fmt.Println("AIR:")
-	fmt.Println(af)
 
-	// Select fastest valid forecast that returns
-	// i.e. the first forecast that used the user's current coordinates.
-
-	// Print report
+	// Get weather and air forecasts.
+	w, a := GetWeatherAndAirForecasts(dsURL, anURL)
+	fmt.Println("WEATHER:\n", <-w)
+	fmt.Println("AIR:\n", <-a)
+	// Select fastest valid forecast that returns i.e. the first forecast that used the user's current coordinates.
 
 	// Save forecast for next call
+
+	// Print duration
+	fmt.Println(time.Since(t).Nanoseconds())
 }
