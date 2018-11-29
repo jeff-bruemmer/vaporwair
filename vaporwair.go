@@ -7,7 +7,6 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/geolocation"
 	"github.com/jeff-bruemmer/vaporwair/storage"
 	"log"
-	"os/user"
 	"time"
 )
 
@@ -43,16 +42,19 @@ func main() {
 	t := time.Now()
 	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
 
-	// Check for saved forecast.
 	// First get home directory for user.
 	homeDir, err := storage.GetHomeDir()
 	if err != nil {
 		log.Fatal("User could not be identified.\n", err)
 	}
-	fmt.Println(homeDir)
+	// Check for saved forecast.
 
 	// If saved forecast found, check if call has expired.
 
+	// Get Config
+	cf := storage.ConfigFilePath(homeDir, storage.ConfigFileName)
+	config := storage.GetConfig(cf)
+	fmt.Println("config:", config)
 	// If still valid, print forecast report and return
 
 	// Get Coordinates from IP-API
@@ -78,11 +80,4 @@ func main() {
 	// Print report
 
 	// Save forecast for next call
-
-	usr, err := user.Current()
-	if err != nil {
-		log.Fatal("User could not be identified\n", err)
-	}
-	configFile := storage.ConfigFilePath(usr.HomeDir)
-	fmt.Println("ConfigFile:", configFile)
 }
