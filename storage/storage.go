@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/user"
+	"time"
 )
 
 const SavedForecastFileName = "/.vaporwair-saved-forecast.json"
@@ -53,4 +54,9 @@ func GetConfig(filepath string) Config {
 	}
 	json.Unmarshal(bytes, &config)
 	return config
+}
+
+// Has the forecast expired?
+func expired(t time.Time, duration float64) bool {
+	return time.Since(t).Minutes() > duration
 }

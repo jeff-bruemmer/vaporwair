@@ -7,24 +7,20 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/geolocation"
 	"github.com/jeff-bruemmer/vaporwair/storage"
 	"log"
+	"os"
 	"time"
 )
 
-// Has the forecast expired?
-func expired(t time.Time, duration float64) bool {
-	return time.Since(t).Minutes() > duration
-}
-
-// Dials IP-API to obtain geolocation data
-func GetGeoData(address string) {
-	resp, err := dialer.NetReq(dialer.IPAPIAddress, 5, false)
-	if err != nil {
-		fmt.Println("There was a problem obtaining your coordinates.")
-	}
-	var geoData geolocation.GeoData
-	defer resp.Body.Close()
-	json.NewDecoder(resp.Body).Decode(&geoData)
-}
+// // Dials IP-API to obtain geolocation data
+// func GetGeoData(address string) {
+// 	resp, err := dialer.NetReq(dialer.IPAPIAddress, 5, false)
+// 	if err != nil {
+// 		fmt.Println("There was a problem obtaining your coordinates.")
+// 	}
+// 	var geoData geolocation.GeoData
+// 	defer resp.Body.Close()
+// 	json.NewDecoder(resp.Body).Decode(&geoData)
+// }
 
 func buildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, units string) string {
 	return addr +
@@ -35,6 +31,26 @@ func buildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, unit
 		fmt.Sprintf("%f", c.Longitude) +
 		"?units=" +
 		units
+}
+
+// GetGeoData dials the IP-API server to obtain geolocation data
+// based on user's IP address.
+func GetGeoData() (geolocation.GeoData, error) {
+	var gd geolocation.GeoData
+	// Request coordinates from ip-api and specify timeout in seconds
+	resp, err := dialer.NetReq("http://ip-api.com/json", 2, false)
+	if err != nil {
+		return gd, err
+	}
+	defer resp.Body.Close()
+	json.NewDecoder(resp.Body).Decode(&gd)
+
+	if gd.Status == "fail" {
+		fmt.Println("The geolocation service could not resolve your coordinates.")
+		os.Exit(1)
+	}
+	return gd, err
+
 }
 
 func main() {
@@ -54,10 +70,17 @@ func main() {
 	// Get Config
 	cf := storage.ConfigFilePath(homeDir, storage.ConfigFileName)
 	config := storage.GetConfig(cf)
-	fmt.Println("config:", config)
+	fmt.Println(config)
 	// If still valid, print forecast report and return
 
 	// Get Coordinates from IP-API
+	var geoData geolocation.GeoData
+	geoData, err = GetGeoData()
+	if err != nil {
+		fmt.Println("There was a problem obtaining your coordinates")
+		log.Fatal(err)
+	}
+	fmt.Println(geoData)
 
 	// build DarkSkyURL
 

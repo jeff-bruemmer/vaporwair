@@ -1,9 +1,15 @@
 package geolocation
 
+import (
+	"strconv"
+	"strings"
+)
+
 type Coordinates struct {
-	Latitude  float64
-	Longitude float64
+	Latitude  string
+	Longitude string
 	City      string
+	Zip       string
 }
 
 type GeoData struct {
@@ -23,13 +29,27 @@ type GeoData struct {
 	Query       string  `json:"query"`
 }
 
-// Extracts Coordinates and City from GeoData struct.
-// Coordinates will be saved to make optimistic API calls that assume user has not changed location.
-func GetCoordinates(data GeoData) Coordinates {
-	c := Coordinates{
-		Latitude:  data.Lat,
-		Longitude: data.Lon,
-		City:      data.City,
+// trimCoordinates drops trailing zeroes following
+// conversion of coordinates from float64 to string
+func trimCoordinates(c string) string {
+	slice := strings.Split(c, "")
+	for i := len(slice) - 1; i > 0; i-- {
+		n := slice[i]
+		if n == "0" {
+			slice = slice[:i]
+		} else {
+			break
+		}
 	}
+	return strings.Join(slice, "")
+}
+
+func FormatCoordinates(gd GeoData) Coordinates {
+	var c Coordinates
+	// Format coordinates for Forecast.io call
+	c.Latitude = trimCoordinates(strconv.FormatFloat(gd.Lat, 'f', 10, 64))
+	c.Longitude = trimCoordinates(strconv.FormatFloat(gd.Lon, 'f', 10, 64))
+	c.City = gd.City
+	c.Zip = gd.Zip
 	return c
 }
