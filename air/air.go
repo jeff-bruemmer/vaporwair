@@ -6,15 +6,15 @@ type Category struct {
 }
 
 type Forecast struct {
-	DateIssue     string      `json:"DateIssue"`
-	DateForecast  string      `json:"DateForecast"`
-	ReportingArea string      `json:"ReportingArea"`
-	StateCode     string      `json:"StateCode"`
-	Latitude      float64     `json:"Latitude"`
-	Longitude     float64     `json:"Longitude"`
-	ParameterName string      `json:"ParameterName"`
-	AQI           int         `json:"AQI"`
-	Category      AirCategory `json:"Category"`
-	ActionDay     bool        `json:"ActionDay"`
-	Discussion    string      `json:"Discussion"`
+	DateIssue     string   `json:"DateIssue"`
+	DateForecast  string   `json:"DateForecast"`
+	ReportingArea string   `json:"ReportingArea"`
+	StateCode     string   `json:"StateCode"`
+	Latitude      float64  `json:"Latitude"`
+	Longitude     float64  `json:"Longitude"`
+	ParameterName string   `json:"ParameterName"`
+	AQI           int      `json:"AQI"`
+	Category      Category `json:"Category"`
+	ActionDay     bool     `json:"ActionDay"`
+	Discussion    string   `json:"Discussion"`
 }

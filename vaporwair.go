@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/jeff-bruemmer/vaporwair/air"
 	"github.com/jeff-bruemmer/vaporwair/dialer"
 	"github.com/jeff-bruemmer/vaporwair/geolocation"
 	"github.com/jeff-bruemmer/vaporwair/storage"
@@ -22,6 +23,15 @@ func buildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, unit
 		c.Longitude +
 		"?units=" +
 		units
+}
+
+func buildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey string) string {
+	return addr +
+		"latitude=" + c.Latitude +
+		"&longitude=" + c.Longitude +
+		"&date=" + date +
+		"&distance=25" +
+		"&API_KEY=" + apiKey
 }
 
 // GetGeoData dials the IP-API server to obtain geolocation data
@@ -66,14 +76,25 @@ func GetWeatherForecast(addr string) (weather.Forecast, error) {
 	return wf, err
 }
 
-// printTime prints time and signals to user that program has started.
-func printTime() {
-	t := time.Now()
-	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
+// GetAirQualityForecasts dials AirNow API and returns a slice of air.Forecast.
+func GetAirQualityForecast(addr string) ([]air.Forecast, error) {
+	var af []air.Forecast
+	resp, err := dialer.NetReq(addr, 10, false)
+	if err != nil {
+		return af, err
+	}
+	defer resp.Body.Close()
+	json.NewDecoder(resp.Body).Decode(&af)
+	return af, err
 }
 
 func main() {
-	printTime()
+	// Print time to signal start and get date for building AirNow Url.
+	t := time.Now()
+	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
+	date := t.Format("2006-01-02")
+	fmt.Println("date:", date)
+
 	// First get home directory for user.
 	homeDir, err := storage.GetHomeDir()
 	if err != nil {
@@ -102,7 +123,8 @@ func main() {
 	dsURL := buildDarkSkyURL(dialer.DarkSkyAddress, config.DarkSkyAPIKey, coordinates, dialer.DarkSkyUnits)
 	fmt.Println(dsURL)
 	// build AirNowURL
-
+	anURL := buildAirNowURL(dialer.AirNowAddress, coordinates, date, config.AirNowAPIKey)
+	fmt.Println(anURL)
 	// If cached forecast has expired, dial IP-API call
 	// If saved coordinates exist, assume user is in same location and use coordinates to:
 	// 1. Dial optimistic Dark Sky API
@@ -118,6 +140,12 @@ func main() {
 	}
 	fmt.Println(wf)
 	// 2. Dial AirNow API
+	af, err := GetAirQualityForecast(anURL)
+	if err != nil {
+		log.Fatal("There was a problem obtaining the air quality forecast.")
+	}
+	fmt.Println("AIR:")
+	fmt.Println(af)
 
 	// Select fastest valid forecast that returns
 	// i.e. the first forecast that used the user's current coordinates.
