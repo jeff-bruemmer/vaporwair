@@ -113,14 +113,16 @@ func main() {
 	// First get home directory for user.
 	homeDir, err := storage.GetHomeDir()
 	if err != nil {
-		log.Fatal("User could not be identified.\n", err)
+		log.Fatal("Home directory could not be determined.\n", err)
 	}
+	// Identify or create vaporwair directory.
+	storage.CreateVaporwairDir(homeDir + "/.vaporwair")
 	// TODO Check for saved forecast.
 
 	// TODO If saved forecast found, check if call has expired.
 
 	// Get Config
-	cf := storage.ConfigFilePath(homeDir, storage.ConfigFileName)
+	cf := storage.FilePath(homeDir, storage.ConfigFileName)
 	config := storage.GetConfig(cf)
 	// If still valid, print forecast report and return
 
@@ -159,5 +161,10 @@ func main() {
 	report.TW.Flush()
 	//Select fastest valid forecast that returns i.e. the first forecast that used the user's current coordinates.
 
-	// TODO Save forecast for next call
+        // Update last api call
+	storage.UpdateLastCall(coordinates, homeDir + storage.SavedCallFileName)	
+	// TODO Save weather forecast for next call
+	storage.SaveWeatherForecast(storage.FilePath(homeDir, storage.SavedWeatherFileName), wr)
+
+
 }

@@ -8,10 +8,15 @@ import (
 	"os"
 	"os/user"
 	"time"
+	"github.com/jeff-bruemmer/vaporwair/geolocation"
+	"github.com/jeff-bruemmer/vaporwair/air"
+	"github.com/jeff-bruemmer/vaporwair/weather"
 )
 
-const SavedForecastFileName = "/.vaporwair-saved-forecast.json"
-const ConfigFileName = "/.vaporwair-config.json"
+const SavedWeatherFileName = "/.vaporwair/weather-forecast.json"
+const SavedAirFileName = "/.vaporwair/air-forecast.json"
+const ConfigFileName = "/.vaporwair/config.json"
+const SavedCallFileName = "/.vaporwair/last-call.json"
 
 type Config struct {
 	DarkSkyAPIKey string `json:"darkskyapikey"`
@@ -23,14 +28,44 @@ func GetHomeDir() (string, error) {
 	return usr.HomeDir, err
 }
 
-func ConfigFilePath(homeDir string, configFileName string) string {
-	return homeDir + configFileName
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+       if err == nil { return true, nil }
+       if os.IsNotExist(err) { return false, nil }
+       return true, err
 }
 
-func GetSavedForecast(f string) (string, error) {
+// exists returns whether the given file or directory exists
+func CreateVaporwairDir(path string) {
+	d, err := exists(path)
+	if err != nil {
+		fmt.Println("There was a problem identifying Vaporwair directory.")
+	}
+	if d {
+		return
+	} else {
+		os.Mkdir(path, 0755)
+	}
+}
+
+func FilePath(homeDir string, f string) string {
+	return homeDir + f 
+}
+
+func LoadSavedWeather(f string) (string, error) {
 	forecast, err := os.Open(f)
 	if err != nil {
-		fmt.Println("No saved forecast found.")
+		fmt.Println("No saved weather forecast found.")
+		return "", err
+	}
+	forecast.Close()
+	return "Saved Forecast data", nil
+}
+
+func LoadSavedAir(f string) (string, error) {
+	forecast, err := os.Open(f)
+	if err != nil {
+		fmt.Println("No saved air forecast found.")
 		return "", err
 	}
 	forecast.Close()
@@ -60,3 +95,110 @@ func GetConfig(filepath string) Config {
 func expired(t time.Time, duration float64) bool {
 	return time.Since(t).Minutes() > duration
 }
+
+// Metadata to determine validity of last API call.
+type APICallInfo struct {
+	Time      time.Time
+	Latitude  string
+	Longitude string
+}
+
+func UpdateLastCall(c geolocation.Coordinates, path string) error {
+	// After call, save report.
+	newCallInfo := APICallInfo{
+		Time:      time.Now(),
+		Latitude:  c.Latitude,
+		Longitude: c.Longitude,
+	}
+
+	err := SaveCall(path, newCallInfo)
+	if err != nil {
+		fmt.Println("Error saving call info.\n", err)
+		return err
+	} else {
+		return nil
+	}
+}
+
+// Load forecast from disk
+func LoadWeatherForecast(path string) (weather.Forecast, error) {
+	var f weather.Forecast
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println("Error reading weather forecast from disk.", err)
+	}
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Fatal("Error unmarshalling json into Forecast.", err)
+	}
+	return f, nil
+}
+
+func LoadAirForecast(path string) (air.Forecast, error) {
+	var f air.Forecast
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println("Error reading air forecast from disk.", err)
+	}
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Fatal("Error unmarshalling json into Forecast.", err)
+	}
+	return f, nil
+}
+
+// Loads call information to determine whether
+// to retrieve forecast from server or disk
+func LoadCallInfo(path string) (APICallInfo, error) {
+	var lastCall APICallInfo
+	f, err := ioutil.ReadFile(path)
+	if err != nil {
+		return lastCall, err
+	}
+	err = json.Unmarshal(f, &lastCall)
+	if err != nil {
+		fmt.Println("Error unmarshalling last api call.\n", err)
+		return lastCall, err
+	}
+	return lastCall, nil
+}
+
+// Save info for future calls
+func SaveCall(path string, info APICallInfo) error {
+	c, err := json.Marshal(info)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(path, c, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func SaveWeatherForecast(path string, f weather.Forecast) bool {
+	c, err := json.Marshal(f)
+	if err != nil {
+		fmt.Println("Error marshalling weather forecast before saving.\n", err)
+		return false
+	}
+	err = ioutil.WriteFile(path, c, 0644)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+func SaveAirForecast(path string, a air.Forecast) bool {
+	c, err := json.Marshal(a)
+	if err != nil {
+		fmt.Println("Error marshalling air forecast before saving.\n", err)
+		return false
+	}
+	err = ioutil.WriteFile(path, c, 0644)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
