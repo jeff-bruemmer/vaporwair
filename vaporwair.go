@@ -9,6 +9,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/geolocation"
 	"github.com/jeff-bruemmer/vaporwair/storage"
 	"github.com/jeff-bruemmer/vaporwair/weather"
+	"github.com/jeff-bruemmer/vaporwair/report"
 	"log"
 	"os"
 	"time"
@@ -105,25 +106,22 @@ func GetWeatherAndAirForecasts(dsURL, anURL string) (chan weather.Forecast, chan
 }
 
 func main() {
-	// Print time to signal start and get date for building AirNow Url.
+	// Print time to signal program start and get date for building AirNow Url.
 	t := time.Now()
 	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
-	date := t.Format("2006-01-02")
-	fmt.Println("date:", date)
 
 	// First get home directory for user.
 	homeDir, err := storage.GetHomeDir()
 	if err != nil {
 		log.Fatal("User could not be identified.\n", err)
 	}
-	// Check for saved forecast.
+	// TODO Check for saved forecast.
 
-	// If saved forecast found, check if call has expired.
+	// TODO If saved forecast found, check if call has expired.
 
 	// Get Config
 	cf := storage.ConfigFilePath(homeDir, storage.ConfigFileName)
 	config := storage.GetConfig(cf)
-	fmt.Println(config)
 	// If still valid, print forecast report and return
 
 	// Get Coordinates from IP-API
@@ -137,10 +135,8 @@ func main() {
 	fmt.Println(coordinates)
 	// build DarkSkyURL
 	dsURL := buildDarkSkyURL(dialer.DarkSkyAddress, config.DarkSkyAPIKey, coordinates, dialer.DarkSkyUnits)
-	fmt.Println(dsURL)
 	// build AirNowURL
-	anURL := buildAirNowURL(dialer.AirNowAddress, coordinates, date, config.AirNowAPIKey)
-	fmt.Println(anURL)
+	anURL := buildAirNowURL(dialer.AirNowAddress, coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
 	// If cached forecast has expired, dial IP-API call
 
 	// If saved coordinates exist, assume user is in same location and use coordinates to:
@@ -154,12 +150,14 @@ func main() {
 
 	// Get weather and air forecasts.
 	w, a := GetWeatherAndAirForecasts(dsURL, anURL)
-	fmt.Println("WEATHER:\n", <-w)
-	fmt.Println("AIR:\n", <-a)
-	// Select fastest valid forecast that returns i.e. the first forecast that used the user's current coordinates.
+	wr := <-w
+	ar := <-a
+	report.CurrentTemp(wr)
+	report.MinTemp(wr)
+	report.MaxTemp(wr)
+	report.AirQualityIndex(ar)
+	report.TW.Flush()
+	//Select fastest valid forecast that returns i.e. the first forecast that used the user's current coordinates.
 
-	// Save forecast for next call
-
-	// Print duration
-	fmt.Println(time.Since(t).Nanoseconds())
+	// TODO Save forecast for next call
 }
