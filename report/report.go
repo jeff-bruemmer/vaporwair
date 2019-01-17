@@ -67,12 +67,12 @@ func FormatTime(t float64) string {
 // Formats
 var tu = "degrees"
 var hm = "HH:MM"
+var wu = "mph"
+var pu = "atm" 
+var du = "miles"
+var pc = "%"
 
-func CurrentTemp(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Current Temperature", Round(f.Hourly.Data[0].Temperature), tu)
-}
-
-// Prints minimum daily temperature and time.
+// Format 1
 func MinTemp(f weather.Forecast) {
 	fmt.Fprintf(TW, f1, "Min Temperature", Round(f.Daily.Data[0].TemperatureMin), tu, FormatTime(f.Daily.Data[0].TemperatureMinTime), hm)
 }
@@ -83,6 +83,57 @@ func MaxTemp(f weather.Forecast) {
 
 }
 
+// Format 2
+// Prints minimum daily temperature and time.
+func CurrentTemp(f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Current Temperature", Round(f.Hourly.Data[0].Temperature), tu)
+}
+
+// Prints humidity converted to percent.
+func Humidity(f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Humidity", ToPercent(f.Daily.Data[0].Humidity), pc)
+}
+
+// Prints the windspeed average for the day.
+func Windspeed (f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Windspeed", f.Daily.Data[0].WindSpeed, wu)
+}
+
+// Prints the average cloudcover as a percentage.
+func Cloudcover (f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Cloudcover", ToPercent(f.Daily.Data[0].CloudCover), pc)
+}
+
+// Prints precipitation and type of precipitation.
+func Precipitation (f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Precipitation", Round(ToPercent(f.Daily.Data[0].PrecipProbability)), pc)
+	if ToPercent(f.Daily.Data[0].PrecipProbability) > 0 {
+		fmt.Fprintf(TW, f3, "Precip Type", f.Daily.Data[0].PrecipType, "")
+	}
+}
+
+// Prints the pressure in atmospheres.
+func Pressure (f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Pressure", f.Daily.Data[0].Pressure, pu)
+}
+
+func Dewpoint (f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Dewpoint", f.Daily.Data[0].DewPoint, tu)
+}
+
+func Visibility(f weather.Forecast) {
+	fmt.Fprintf(TW, f2, "Visibility", f.Daily.Data[0].Visibility, du)
+}
+
+// Format 3
 func AirQualityIndex(f []air.Forecast) {
 	fmt.Fprintf(TW, f3, "AQI", f[0].AQI, f[0].Category.Name)
+}
+
+func Sunrise(f weather.Forecast) {
+	fmt.Fprintf(TW, f3, "Sunrise", FormatTime(f.Daily.Data[0].SunriseTime), hm)
+}
+
+func Sunset(f weather.Forecast) {
+	fmt.Fprintf(TW, f3, "Sunset", FormatTime(f.Daily.Data[0].SunsetTime), hm)
 }

@@ -52,24 +52,30 @@ func FilePath(homeDir string, f string) string {
 	return homeDir + f 
 }
 
-func LoadSavedWeather(f string) (string, error) {
-	forecast, err := os.Open(f)
+func LoadSavedWeather(path string) (weather.Forecast, error) {
+	var f weather.Forecast
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Println("No saved weather forecast found.")
-		return "", err
+		fmt.Println("Error reading forecast from disk.", err)
 	}
-	forecast.Close()
-	return "Saved Forecast data", nil
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Fatal("Error unmarshalling json into Forecast.", err)
+	}
+	return f, nil
 }
 
-func LoadSavedAir(f string) (string, error) {
-	forecast, err := os.Open(f)
+func LoadSavedAir(path string) (air.Forecast, error) {
+	var f air.Forecast
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Println("No saved air forecast found.")
-		return "", err
+		fmt.Println("Error reading forecast from disk.", err)
 	}
-	forecast.Close()
-	return "Saved Forecast data", nil
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Fatal("Error unmarshalling json into Forecast.", err)
+	}
+	return f, nil
 }
 
 // Checks home folder for vaporwair config file to retrieve API Keys
@@ -110,7 +116,6 @@ func UpdateLastCall(c geolocation.Coordinates, path string) error {
 		Latitude:  c.Latitude,
 		Longitude: c.Longitude,
 	}
-
 	err := SaveCall(path, newCallInfo)
 	if err != nil {
 		fmt.Println("Error saving call info.\n", err)
@@ -118,33 +123,6 @@ func UpdateLastCall(c geolocation.Coordinates, path string) error {
 	} else {
 		return nil
 	}
-}
-
-// Load forecast from disk
-func LoadWeatherForecast(path string) (weather.Forecast, error) {
-	var f weather.Forecast
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		fmt.Println("Error reading weather forecast from disk.", err)
-	}
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Fatal("Error unmarshalling json into Forecast.", err)
-	}
-	return f, nil
-}
-
-func LoadAirForecast(path string) (air.Forecast, error) {
-	var f air.Forecast
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		fmt.Println("Error reading air forecast from disk.", err)
-	}
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Fatal("Error unmarshalling json into Forecast.", err)
-	}
-	return f, nil
 }
 
 // Loads call information to determine whether
@@ -189,7 +167,7 @@ func SaveWeatherForecast(path string, f weather.Forecast) bool {
 	return true
 }
 
-func SaveAirForecast(path string, a air.Forecast) bool {
+func SaveAirForecast(path string, a []air.Forecast) bool {
 	c, err := json.Marshal(a)
 	if err != nil {
 		fmt.Println("Error marshalling air forecast before saving.\n", err)

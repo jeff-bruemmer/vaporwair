@@ -115,10 +115,11 @@ func main() {
 	if err != nil {
 		log.Fatal("Home directory could not be determined.\n", err)
 	}
-	// Identify or create vaporwair directory.
-	storage.CreateVaporwairDir(homeDir + "/.vaporwair")
-	// TODO Check for saved forecast.
 
+	// Identify or create vaporwair directory.
+
+	// TODO Check for saved forecast.
+	
 	// TODO If saved forecast found, check if call has expired.
 
 	// Get Config
@@ -166,5 +167,5 @@ func main() {
 	// TODO Save weather forecast for next call
 	storage.SaveWeatherForecast(storage.FilePath(homeDir, storage.SavedWeatherFileName), wr)
 
-
+	storage.SaveAirForecast(storage.FilePath(homeDir, storage.SavedAirFileName), ar)
 }
