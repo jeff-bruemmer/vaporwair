@@ -137,3 +137,13 @@ func Sunrise(f weather.Forecast) {
 func Sunset(f weather.Forecast) {
 	fmt.Fprintf(TW, f3, "Sunset", FormatTime(f.Daily.Data[0].SunsetTime), hm)
 }
+
+func Today(wf weather.Forecast, af []air.Forecast) {
+	CurrentTemp(wf)
+	MinTemp(wf)
+	MaxTemp(wf)
+	AirQualityIndex(af)
+	Precipitation(wf)
+	Sunrise(wf)
+	Sunset(wf)
+}

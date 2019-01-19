@@ -39,12 +39,13 @@ func buildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey 
 
 // GetGeoData dials the IP-API server to obtain geolocation data
 // based on user's IP address.
-func GetGeoData(addr string) (geolocation.GeoData, error) {
+func GetGeoData(addr string) geolocation.GeoData {
 	var gd geolocation.GeoData
 	// Request coordinates from ip-api and specify timeout in seconds
 	resp, err := dialer.NetReq(addr, 5, false)
 	if err != nil {
-		return gd, err
+		fmt.Println("The geolocation service could not resolve your coordinates.")
+		os.Exit(1)
 	}
 	defer resp.Body.Close()
 	json.NewDecoder(resp.Body).Decode(&gd)
@@ -53,8 +54,7 @@ func GetGeoData(addr string) (geolocation.GeoData, error) {
 		fmt.Println("The geolocation service could not resolve your coordinates.")
 		os.Exit(1)
 	}
-	return gd, err
-
+	return gd
 }
 
 // GetWeatherForecast dials the Dark Sky API and returns a weather.Forecast.
@@ -105,7 +105,55 @@ func GetWeatherAndAirForecasts(dsURL, anURL string) (chan weather.Forecast, chan
 	return weather, air
 }
 
+
+// fastAirForecast returns the first valid forecast
+// to return from an api call.
+func fastAirForecast(vc bool, nc geolocation.Coordinates, oaf, naf chan air.Forecast) air.Forecast {
+	var af air.Forecast
+	// If previously used coordinates are valid
+	if vc {
+		// Either call is valid, first call to return wins
+		select {
+		case af = <-oaf:
+			break
+		case af = <-naf:
+			break
+		}
+		// Otherwise the old coordinates are invalid and only the new air forecast is valid.
+	} else {
+		af = <-naf
+	}
+
+	return af
+}
+
+// fastWeatherForecast returns the first valid forecast
+// to return from an api call.
+func fastWeatherForecast(vc bool, nc geolocation.Coordinates, owf, nwf chan weather.Forecast) weather.Forecast {
+	var wf weather.Forecast
+	// If previously used coordinates are valid
+	if vc {
+		// Either call is valid, first call to return wins
+		select {
+		case wf = <-owf:
+			break
+		case wf = <-nwf:
+			break
+		}
+		// Otherwise the old coordinates are invalid and only the new air forecast is valid.
+	} else {
+		wf = <-nwf
+	}
+
+	return wf
+}
+
 func main() {
+	// Get Coordinates from IP-API
+	geoChan := make(chan geolocation.GeoData)
+	go func () {
+		geoChan <- GetGeoData(dialer.IPAPIAddress)
+	}()
 	// Print time to signal program start and get date for building AirNow Url.
 	t := time.Now()
 	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
@@ -117,25 +165,42 @@ func main() {
 	}
 
 	// Identify or create vaporwair directory.
+	storage.CreateVaporwairDir(homeDir + storage.VaporwairDir)
 
-	// TODO Check for saved forecast.
+	// Load previous call metadata to determine if call is still valid.
+	oc, err := storage.LoadCallInfo(homeDir + storage.SavedCallFileName)
+	if err != nil {
+		fmt.Println("No previous call info detected.")
+	}
+
+	fmt.Println(oc)
+	// Load old weather forecast from disk
+	owf, err := storage.LoadSavedWeather(homeDir + storage.SavedWeatherFileName)
+	if err != nil {
+		fmt.Println("No previous weather forecast found.")
+	}
+
+	// Load old air forecast from disk
+	oaf, err := storage.LoadSavedAir(homeDir + storage.SavedAirFileName)
+	if err != nil {
+		fmt.Println("No previous air forecast found.")
+	}
 	
-	// TODO If saved forecast found, check if call has expired.
+	// TODO Check for saved forecasts.
+	fmt.Println(oaf, owf)
+	
+	// TODO If saved forecasts are found, check if the call has expired.
 
 	// Get Config
-	cf := storage.FilePath(homeDir, storage.ConfigFileName)
+	cf := homeDir + storage.ConfigFileName
 	config := storage.GetConfig(cf)
 	// If still valid, print forecast report and return
 
-	// Get Coordinates from IP-API
-	var geoData geolocation.GeoData
-	geoData, err = GetGeoData(dialer.IPAPIAddress)
-	if err != nil {
-		fmt.Println("There was a problem obtaining your coordinates.")
-		log.Fatal(err)
-	}
+	// Get geolocation data from channel and extract coordinates.
+	geoData := <-geoChan
 	coordinates := geolocation.FormatCoordinates(geoData)
-	fmt.Println(coordinates)
+	fmt.Println(coordinates.City, coordinates.Zip, "|", coordinates.Latitude, ",", coordinates.Longitude)
+
 	// build DarkSkyURL
 	dsURL := buildDarkSkyURL(dialer.DarkSkyAddress, config.DarkSkyAPIKey, coordinates, dialer.DarkSkyUnits)
 	// build AirNowURL
@@ -153,19 +218,16 @@ func main() {
 
 	// Get weather and air forecasts.
 	w, a := GetWeatherAndAirForecasts(dsURL, anURL)
-	wr := <-w
-	ar := <-a
-	report.CurrentTemp(wr)
-	report.MinTemp(wr)
-	report.MaxTemp(wr)
-	report.AirQualityIndex(ar)
+	wf := <-w
+	af := <-a
+	report.Today(wf, af)
 	report.TW.Flush()
 	//Select fastest valid forecast that returns i.e. the first forecast that used the user's current coordinates.
 
         // Update last api call
 	storage.UpdateLastCall(coordinates, homeDir + storage.SavedCallFileName)	
 	// TODO Save weather forecast for next call
-	storage.SaveWeatherForecast(storage.FilePath(homeDir, storage.SavedWeatherFileName), wr)
+	storage.SaveWeatherForecast(homeDir + storage.SavedWeatherFileName, wf)
 
-	storage.SaveAirForecast(storage.FilePath(homeDir, storage.SavedAirFileName), ar)
+	storage.SaveAirForecast(homeDir + storage.SavedAirFileName, af)
 }

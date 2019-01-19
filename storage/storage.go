@@ -13,10 +13,11 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/weather"
 )
 
-const SavedWeatherFileName = "/.vaporwair/weather-forecast.json"
-const SavedAirFileName = "/.vaporwair/air-forecast.json"
-const ConfigFileName = "/.vaporwair/config.json"
-const SavedCallFileName = "/.vaporwair/last-call.json"
+const VaporwairDir = "/.vaporwair/"
+const SavedWeatherFileName = VaporwairDir + "weather-forecast.json"
+const SavedAirFileName = VaporwairDir + "air-forecast.json"
+const ConfigFileName = VaporwairDir + "config.json"
+const SavedCallFileName = VaporwairDir + "last-call.json"
 
 type Config struct {
 	DarkSkyAPIKey string `json:"darkskyapikey"`
@@ -48,10 +49,6 @@ func CreateVaporwairDir(path string) {
 	}
 }
 
-func FilePath(homeDir string, f string) string {
-	return homeDir + f 
-}
-
 func LoadSavedWeather(path string) (weather.Forecast, error) {
 	var f weather.Forecast
 	b, err := ioutil.ReadFile(path)
@@ -65,8 +62,8 @@ func LoadSavedWeather(path string) (weather.Forecast, error) {
 	return f, nil
 }
 
-func LoadSavedAir(path string) (air.Forecast, error) {
-	var f air.Forecast
+func LoadSavedAir(path string) ([]air.Forecast, error) {
+	var f []air.Forecast
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		fmt.Println("Error reading forecast from disk.", err)
@@ -179,4 +176,11 @@ func SaveAirForecast(path string, a []air.Forecast) bool {
 	}
 	return true
 }
+
+
+// Has the forecast expired?
+func Expired(t time.Time, duration float64) bool {
+	return time.Since(t).Minutes() > duration
+}
+
 
