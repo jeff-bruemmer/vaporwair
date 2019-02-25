@@ -92,7 +92,7 @@ func GetAirQualityForecast(addr string) []air.Forecast {
 }
 
 // GetWeatherAndAirForecasts fires 2 goroutines to get weather and air reports,
-// and returns each in a channel. If either call fails, the program exits.
+// and returns each in a channel.
 func GetWeatherAndAirForecasts(dsURL, anURL string) (chan weather.Forecast, chan []air.Forecast) {
 	weather := make(chan weather.Forecast)
 	air := make(chan []air.Forecast)
@@ -108,11 +108,13 @@ func GetWeatherAndAirForecasts(dsURL, anURL string) (chan weather.Forecast, chan
 
 // fastAirForecast returns the first valid forecast
 // to return from an api call.
+// oaf = old air forecast (using the old coordinates)
+// naf = new air forecast (using the new coordinates)
 func fastAirForecast(vc bool, nc geolocation.Coordinates, oaf, naf chan air.Forecast) air.Forecast {
 	var af air.Forecast
 	// If previously used coordinates are valid
 	if vc {
-		// Either call is valid, first call to return wins
+		// Therefore either call is valid, so first call to return wins
 		select {
 		case af = <-oaf:
 			break
@@ -148,13 +150,19 @@ func fastWeatherForecast(vc bool, nc geolocation.Coordinates, owf, nwf chan weat
 	return wf
 }
 
+// Has the forecast expired? Specify a duration (in minutes) that determines whether or not
+// the forecast is still valid.
+func expired(t time.Time, duration float64) bool {
+	return time.Since(t).Minutes() < duration
+}
+
 func main() {
 	// Get Coordinates from IP-API
 	geoChan := make(chan geolocation.GeoData)
 	go func () {
 		geoChan <- GetGeoData(dialer.IPAPIAddress)
 	}()
-	// Print time to signal program start and get date for building AirNow Url.
+	// Print time in order to signal program start and get date for building AirNow Url.
 	t := time.Now()
 	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
 
@@ -173,7 +181,6 @@ func main() {
 		fmt.Println("No previous call info detected.")
 	}
 
-	fmt.Println(oc)
 	// Load old weather forecast from disk
 	owf, err := storage.LoadSavedWeather(homeDir + storage.SavedWeatherFileName)
 	if err != nil {
@@ -185,16 +192,26 @@ func main() {
 	if err != nil {
 		fmt.Println("No previous air forecast found.")
 	}
-	
-	// TODO Check for saved forecasts.
-	fmt.Println(oaf, owf)
-	
-	// TODO If saved forecasts are found, check if the call has expired.
 
 	// Get Config
 	cf := homeDir + storage.ConfigFileName
 	config := storage.GetConfig(cf)
-	// If still valid, print forecast report and return
+
+	fmt.Println(oc.Time)
+	// If saved forecasts are found, check if the call has expired.
+	valid := expired(oc.Time, 1)
+
+
+	// If the previous air and weather forecasts are still valid,
+	// (i.e. they were made within the last x minutes, presumably from the same location)
+	// print forecast report and return
+	if (valid) {
+		fmt.Println("Report from cache.")
+		report.Today(owf, oaf)
+		report.TW.Flush()
+		return
+	}	
+	// Otherwise get updated forecast
 
 	// Get geolocation data from channel and extract coordinates.
 	geoData := <-geoChan
@@ -222,12 +239,13 @@ func main() {
 	af := <-a
 	report.Today(wf, af)
 	report.TW.Flush()
+
 	//Select fastest valid forecast that returns i.e. the first forecast that used the user's current coordinates.
 
         // Update last api call
 	storage.UpdateLastCall(coordinates, homeDir + storage.SavedCallFileName)	
-	// TODO Save weather forecast for next call
-	storage.SaveWeatherForecast(homeDir + storage.SavedWeatherFileName, wf)
 
+	// Save forecasts for next call
+	storage.SaveWeatherForecast(homeDir + storage.SavedWeatherFileName, wf)
 	storage.SaveAirForecast(homeDir + storage.SavedAirFileName, af)
 }

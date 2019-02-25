@@ -24,6 +24,13 @@ type Config struct {
 	AirNowAPIKey  string `json:"airnowapikey"`
 }
 
+// Metadata to determine validity of last API call.
+type APICallInfo struct {
+	Time      time.Time
+	Latitude  string
+	Longitude string
+}
+
 func GetHomeDir() (string, error) {
 	usr, err := user.Current()
 	return usr.HomeDir, err
@@ -97,13 +104,6 @@ func GetConfig(filepath string) Config {
 // Has the forecast expired?
 func expired(t time.Time, duration float64) bool {
 	return time.Since(t).Minutes() > duration
-}
-
-// Metadata to determine validity of last API call.
-type APICallInfo struct {
-	Time      time.Time
-	Latitude  string
-	Longitude string
 }
 
 func UpdateLastCall(c geolocation.Coordinates, path string) error {
