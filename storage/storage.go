@@ -26,9 +26,8 @@ type Config struct {
 
 // Metadata to determine validity of last API call.
 type APICallInfo struct {
-	Time      time.Time
-	Latitude  string
-	Longitude string
+	Time        time.Time
+	Coordinates geolocation.Coordinates
 }
 
 func GetHomeDir() (string, error) {
@@ -110,8 +109,7 @@ func UpdateLastCall(c geolocation.Coordinates, path string) error {
 	// After call, save report.
 	newCallInfo := APICallInfo{
 		Time:      time.Now(),
-		Latitude:  c.Latitude,
-		Longitude: c.Longitude,
+		Coordinates:  c,
 	}
 	err := SaveCall(path, newCallInfo)
 	if err != nil {
