@@ -1,9 +1,17 @@
 package weather
 
+import (
+	"github.com/jeff-bruemmer/vaporwair/dialer"
+	"github.com/jeff-bruemmer/vaporwair/geolocation"
+	"encoding/json"
+	"compress/gzip"
+	"log"
+	"fmt"
+)
+
 type Flags struct {
 	DarkSkyUnavailable string   `json:"darksky-unavailable"`
-	DarkSkyStations    []string `json:"darksky-stations"`
-	DataPointStations  []string `json:"datapoint-stations"`
+	DarkSkyStation     string `json:"datapoint-stations"`
 	ISDStations        []string `json:"isds-stations"`
 	LAMPStations       []string `json:"lamp-stations"`
 	METARStations      []string `json:"metars-stations"`
@@ -79,3 +87,42 @@ const (
 	UK   Units = "uk"
 	AUTO Units = "auto"
 )
+
+
+const DarkSkyAddress = "https://api.darksky.net/forecast/"
+const DarkSkyUnits = "auto"
+
+// buildAirNowURL creates http address for dialer to call Dark Sky API.
+func BuildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, units string) string {
+	return addr +
+		apikey +
+		"/" +
+		c.Latitude +
+		"," +
+		c.Longitude +
+		"?units=" +
+		units
+}
+
+// GetForecast dials the Dark Sky API and returns a Forecast.
+func GetForecast(addr string) Forecast {
+	var wf Forecast
+	// Request coordinates from ip-api and specify timeout in seconds
+	// Set gzip bool to true.
+	resp, err := dialer.NetReq(addr, 5, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Unzip response
+	defer resp.Body.Close()
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		fmt.Println("Error decoding gzip response from Dark Sky API.")
+		log.Fatal(err)
+	}
+	// Decode unzipped response into weather forecast.
+	defer gz.Close()
+	json.NewDecoder(gz).Decode(&wf)
+	return wf
+}
+

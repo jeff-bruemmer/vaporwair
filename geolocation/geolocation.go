@@ -3,6 +3,10 @@ package geolocation
 import (
 	"strconv"
 	"strings"
+	"github.com/jeff-bruemmer/vaporwair/dialer"
+	"encoding/json"
+	"os"
+	"fmt"
 )
 
 type Coordinates struct {
@@ -29,6 +33,9 @@ type GeoData struct {
 	Query       string  `json:"query"`
 }
 
+
+const IPAPIAddress = "http://ip-api.com/json"
+
 // trimCoordinates drops trailing zeroes following
 // conversion of coordinates from float64 to string
 func trimCoordinates(c string) string {
@@ -53,3 +60,26 @@ func FormatCoordinates(gd GeoData) Coordinates {
 	c.Zip = gd.Zip
 	return c
 }
+
+// GetGeoData dials the IP-API server to obtain geolocation data
+// based on user's IP address.
+func GetGeoData(addr string) GeoData {
+	var gd GeoData
+	// Request coordinates from ip-api and specify timeout in seconds
+	resp, err := dialer.NetReq(addr, 5, false)
+	if err != nil {
+		fmt.Println("The geolocation service could not resolve your coordinates.")
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	json.NewDecoder(resp.Body).Decode(&gd)
+
+	if gd.Status == "fail" {
+		fmt.Println("The geolocation service could not resolve your coordinates.")
+		os.Exit(1)
+	}
+	return gd
+}
+
+
+
