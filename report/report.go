@@ -2,12 +2,12 @@ package report
 
 import (
 	"fmt"
-	"text/tabwriter"
+	"github.com/jeff-bruemmer/vaporwair/air"
+	"github.com/jeff-bruemmer/vaporwair/weather"
 	"os"
 	"strings"
+	"text/tabwriter"
 	"time"
-	"github.com/jeff-bruemmer/vaporwair/weather"
-	"github.com/jeff-bruemmer/vaporwair/air"
 )
 
 // Tabwriter configuration
@@ -27,9 +27,9 @@ var Separator = "+++"
 var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags)
 
 // Formats
-var	f1 = "%s:\t%.0f %s at %v %s\n"
-var	f2 = "%s:\t%.0f %s\n"
-var	f3 = "%s:\t%v %s\n"
+var f1 = "%s:\t%.0f %s at %v %s\n"
+var f2 = "%s:\t%.0f %s\n"
+var f3 = "%s:\t%v %s\n"
 
 // Adds space padding
 func Pad(v int) string {
@@ -64,11 +64,20 @@ func FormatTime(t float64) string {
 	return time.Unix(int64(t), 0).Format("15:04")
 }
 
+// Limit slice of data, provided the slice is at least the desired length.
+func LimitData(d []weather.DataPoint, l int) []weather.DataPoint {
+	if len(d) >= l {
+		return d[0:l]
+	} else {
+		return d
+	}
+}
+
 // Formats
-var tu = "degrees"
+var tu = "°F"
 var hm = "HH:MM"
 var wu = "mph"
-var pu = "atm" 
+var pu = "atm"
 var du = "miles"
 var pc = "%"
 
@@ -95,17 +104,17 @@ func Humidity(f weather.Forecast) {
 }
 
 // Prints the windspeed average for the day.
-func Windspeed (f weather.Forecast) {
+func Windspeed(f weather.Forecast) {
 	fmt.Fprintf(TW, f2, "Windspeed", f.Daily.Data[0].WindSpeed, wu)
 }
 
 // Prints the average cloudcover as a percentage.
-func Cloudcover (f weather.Forecast) {
+func Cloudcover(f weather.Forecast) {
 	fmt.Fprintf(TW, f2, "Cloudcover", ToPercent(f.Daily.Data[0].CloudCover), pc)
 }
 
 // Prints precipitation and type of precipitation.
-func Precipitation (f weather.Forecast) {
+func Precipitation(f weather.Forecast) {
 	fmt.Fprintf(TW, f2, "Precipitation", Round(ToPercent(f.Daily.Data[0].PrecipProbability)), pc)
 	if ToPercent(f.Daily.Data[0].PrecipProbability) > 0 {
 		fmt.Fprintf(TW, f3, "Precip Type", f.Daily.Data[0].PrecipType, "")
@@ -113,11 +122,11 @@ func Precipitation (f weather.Forecast) {
 }
 
 // Prints the pressure in atmospheres.
-func Pressure (f weather.Forecast) {
+func Pressure(f weather.Forecast) {
 	fmt.Fprintf(TW, f2, "Pressure", f.Daily.Data[0].Pressure, pu)
 }
 
-func Dewpoint (f weather.Forecast) {
+func Dewpoint(f weather.Forecast) {
 	fmt.Fprintf(TW, f2, "Dewpoint", f.Daily.Data[0].DewPoint, tu)
 }
 

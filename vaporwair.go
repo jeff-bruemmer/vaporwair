@@ -18,6 +18,8 @@ var weatherForecast weather.Forecast
 var airForecast []air.Forecast
 var config storage.Config
 
+const Timeout = 5
+
 // Is the forecast still valid? Specify a timeout duration (in minutes) that determines whether or not
 // the forecast is still valid.
 func isValid(t time.Time, timeout float64) bool {
@@ -120,7 +122,6 @@ func main() {
 	pc, err := storage.LoadCallInfo(homeDir + storage.SavedCallFileName)
 	if err != nil {
 		// If not, run the reports for the first time.
-		fmt.Println("No previous call info detected.")
 		coordinates := GetCoordinates()
 		weatherForecast, airForecast = RunReportsForFirstTime(coordinates, t)
 		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
@@ -128,7 +129,7 @@ func main() {
 	}
 
 	// If saved forecasts are found, check if the call has expired.
-	valid := isValid(pc.Time, 5)
+	valid := isValid(pc.Time, Timeout)
 
 	// If the previous air and weather forecasts are still valid
 	// i.e. they were made within the timeout period suppplied to the isValid function
@@ -148,6 +149,7 @@ func main() {
 
 		runReports(pwf, paf)
 		report.TW.Flush()
+		return
 	}
 
 	// Assume user has not changed coordinates since last weather check
@@ -172,28 +174,42 @@ func main() {
 	coordinates := geolocation.FormatCoordinates(geoData)
 	fmt.Println(coordinates.City, coordinates.Zip, "|", coordinates.Latitude, ",", coordinates.Longitude)
 
-	// If coordinates returned by IP-API call differ from coordinates in saved forecast,
-	// user is in a new location, and calls with the updated coordinates need to be made.
+	// If current coordinates match previous coordinates, the optimistic API calls
+	// are valid, no need to make new calls.
+	if coordinates.Latitude == pc.Coordinates.Latitude &&
+		coordinates.Longitude == pc.Coordinates.Longitude {
+		weatherForecast = <-ow
+		close(ow)
+		airForecast = <-oa
+		close(oa)
+		runReports(weatherForecast, airForecast)
+		report.TW.Flush()
+		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
+		return
+	} else {
+		// If coordinates returned by IP-API call differ from coordinates in saved forecast,
+		// user is in a new location, and calls with the updated coordinates need to be made.
+		// build DarkSkyURL
+		dsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, coordinates, weather.DarkSkyUnits)
+		// build AirNowURL
+		anURL := air.BuildAirNowURL(air.AirNowAddress, coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
 
-	// build DarkSkyURL
-	dsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, coordinates, weather.DarkSkyUnits)
-	// build AirNowURL
-	anURL := air.BuildAirNowURL(air.AirNowAddress, coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
+		// Asynchronously make calls to Dark Sky and Airnow with confirmed coordinates
+		go func() {
+			weatherChan <- weather.GetForecast(dsURL)
+		}()
+		go func() {
+			airChan <- air.GetForecast(anURL)
+		}()
 
-	// Asynchronously make calls to Dark Sky and Airnow with confirmed coordinates
-	go func() {
-		weatherChan <- weather.GetForecast(dsURL)
-	}()
-	go func() {
-		airChan <- air.GetForecast(anURL)
-	}()
+		weatherForecast = <-weatherChan
+		close(weatherChan)
+		airForecast = <-airChan
+		close(airChan)
+		runReports(weatherForecast, airForecast)
+		report.TW.Flush()
 
-	weatherForecast = <-weatherChan
-	close(weatherChan)
-	airForecast = <-airChan
-	close(airChan)
-	runReports(weatherForecast, airForecast)
-	report.TW.Flush()
-
-	SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
+		// Save forecasts
+		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
+	}
 }
