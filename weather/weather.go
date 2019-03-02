@@ -88,11 +88,10 @@ const (
 	AUTO Units = "auto"
 )
 
-
 const DarkSkyAddress = "https://api.darksky.net/forecast/"
 const DarkSkyUnits = "auto"
 
-// buildAirNowURL creates http address for dialer to call Dark Sky API.
+// BuildAirNowURL creates http address for dialer to call Dark Sky API.
 func BuildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, units string) string {
 	return addr +
 		apikey +

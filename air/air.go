@@ -28,7 +28,7 @@ type Forecast struct {
 
 const AirNowAddress = "http://www.airnowapi.org/aq/forecast/latLong/?format=application/json&"
 
-// buildAirNowURL creates http address for dialer to call Air Now API.
+// BuildAirNowURL creates http address for dialer to call Air Now API.
 func BuildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey string) string {
 	return addr +
 		"latitude=" + c.Latitude +
@@ -37,7 +37,6 @@ func BuildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey 
 		"&distance=25" +
 		"&API_KEY=" + apiKey
 }
-
 
 // GetForecast dials AirNow API and returns a slice of Forecasts.
 func GetForecast(addr string) []Forecast {

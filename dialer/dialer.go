@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-
 // NetReq returns an *http.Response, or times out after a specified duration.
 func NetReq(url string, s time.Duration, gzip bool) (*http.Response, error) {
 	t := time.Duration(s * time.Second)
