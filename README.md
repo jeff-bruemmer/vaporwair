@@ -1,6 +1,26 @@
 # Vaporwair
 Fast weather and air quality reports in your terminal.  
 
+![alt text][anemometer]
+[anemometer]: https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.svg "Anemometer"
+
+
+## Rationale
+I wanted to be able to be able to pop open a terminal and get air quality and weather reports as quickly as possible. I'm a fan of the text interface and command line programs in general, and the weather makes a good case. I chose to write it in go both for its command line and os facilities as well as its concurrency model.
+
+## How Vaporwair Works
+Weather gets your coordinates using your IP address, calls the Dark Sky and AirNow APIs to get location based-weather and air quality reports.
+
+## On Vaporwair Speed
+1. To prevent needless network calls, Vaporwair determines if you made a call within the last five minutes. If so, it assumes the data is still valid, and Vaporwair executes reports using the last stored call. This shortcut assumes your coordinates have not meaningfully changed in the last minute.
+2. Meanwhile, Vaporwair has already kicked off asynchronous API calls in case the stored data has expired vaporwair needs to retrieve a new forecast. This greedy call bets that the most recently used coordinates are your current coordinates. 
+3. Also meanwhile, Vaporwair is calling the ip-api to obtain your current coordinates.
+4. After aquiring your coordinates, Vaporwair compares the coordinates to those used for the first, greedy call to the APIs in step 2. If the coordinates match, the forecast is valid for your location and Vaporwair executes the report. If not...
+5. Vaporwair calls the APIs with your updated coordinates and executes the report.
+
+## Reports
+
+
 ## Setup
 1. Get API keys 
 Vaporwair requires two free API keys.
@@ -23,16 +43,6 @@ Run default weather and air quality report: run with no arguments.
 ```
 > vaporwair
 ```
-
-## How Vaporwair Works
-Weather gets your coordinates using your ip address, calls the Dark Sky and AirNow APIs to get location based-weather and air quality reports.
-
-## On Vaporwair Speed
-1. To prevent needless network calls, Vaporwair determines if you made a call within the last five minutes. If so, the data is still valid, and Vaporwair executes a report using the last stored call. This shortcut assumes your coordinates have not meaningfully changed in the last minute.
-2. Meanwhile, Vaporwair has already kicked off asynchronous API calls in case the stored data has expired vaporwair needs to retrieve a new forecast. This greedy call bets that the most recently used coordinates are your current coordinates. 
-3. Also meanwhile, Vaporwair is calling the ip-api to obtain your current coordinates.
-4. After aquiring your coordinates, Vaporwair compares the coordinates to those used for the first, greedy call to the APIs in step 2. If the coordinates match, the forecast is valid for your location and Vaporwair executes the report. If not...
-5. Vaporwair calls the APIs with your updated coordinates and executes the report.
 
 [Powered by Dark Sky](https://darksky.net/poweredby/) and [AirNow](https://airnow.gov/).
 
