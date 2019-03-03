@@ -8,6 +8,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/report"
 	"github.com/jeff-bruemmer/vaporwair/storage"
 	"github.com/jeff-bruemmer/vaporwair/weather"
+	"log"
 	"time"
 )
 
@@ -89,7 +90,6 @@ func main() {
 	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
 	// Parse flags to determine which report to run.
 	flag.Parse()
-
 	// First get home directory for user.
 	homeDir, err := storage.GetHomeDir()
 
@@ -104,8 +104,18 @@ func main() {
 	// Identify or create vaporwair directory.
 	storage.CreateVaporwairDir(homeDir + storage.VaporwairDir)
 
-	// Get Config
+	// Create or get Config
 	cf := homeDir + storage.ConfigFileName
+
+	configExists, _ := storage.Exists(cf)
+	if !configExists {
+		DSAPIKey := storage.Capture("Enter Dark Sky API key: ")
+		ANAPIKey := storage.Capture("Enter Air Now API key: ")
+		err = storage.CreateConfig(homeDir, DSAPIKey, ANAPIKey)
+		if err != nil {
+			log.Fatal("There was a problem saving your APIkeys.")
+		}
+	}
 	config = storage.GetConfig(cf)
 
 	// Get Coordinates from IP-API

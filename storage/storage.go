@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/air"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"os"
 	"os/user"
+	"strings"
 	"time"
 )
 
@@ -38,8 +40,36 @@ func GetHomeDir() (string, error) {
 	return usr.HomeDir, err
 }
 
+// Capture takes a prompt and returns user-entered string.
+func Capture(prompt string) string {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print(prompt)
+	text, _ := reader.ReadString('\n')
+	return strings.TrimSpace(text)
+}
+
+func CreateConfig(homeDir, dsak, anak string) error {
+	path := homeDir + ConfigFileName
+	os.Create(path)
+	config := Config{}
+	config.DarkSkyAPIKey = dsak
+	config.AirNowAPIKey = anak
+	c, err := json.Marshal(config)
+	if err != nil {
+		fmt.Println("There was an error marshalling the configuration.")
+		return err
+	}
+	err = ioutil.WriteFile(path, c, 0644)
+	if err != nil {
+		fmt.Println("There was an error writing the config file to ", path)
+		os.Remove(path)
+		return err
+	}
+	return nil
+}
+
 // exists returns whether the given file or directory exists
-func exists(path string) (bool, error) {
+func Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true, nil
@@ -53,7 +83,7 @@ func exists(path string) (bool, error) {
 // Creates a directory to cache forecasts and call data
 // if that directory does not already exist.
 func CreateVaporwairDir(path string) {
-	d, err := exists(path)
+	d, err := Exists(path)
 	if err != nil {
 		fmt.Println("There was a problem identifying Vaporwair directory.")
 	}
