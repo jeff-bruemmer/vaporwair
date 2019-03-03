@@ -3,14 +3,14 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jeff-bruemmer/vaporwair/air"
+	"github.com/jeff-bruemmer/vaporwair/geolocation"
+	"github.com/jeff-bruemmer/vaporwair/weather"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
 	"time"
-	"github.com/jeff-bruemmer/vaporwair/geolocation"
-	"github.com/jeff-bruemmer/vaporwair/air"
-	"github.com/jeff-bruemmer/vaporwair/weather"
 )
 
 const VaporwairDir = "/.vaporwair/"
@@ -19,30 +19,39 @@ const SavedAirFileName = VaporwairDir + "air-forecast.json"
 const ConfigFileName = VaporwairDir + "config.json"
 const SavedCallFileName = VaporwairDir + "last-call.json"
 
+// The Config type is used to store API keys.
 type Config struct {
 	DarkSkyAPIKey string `json:"darkskyapikey"`
 	AirNowAPIKey  string `json:"airnowapikey"`
 }
 
-// Metadata to determine validity of last API call.
+// APICallInfo contains metadata to determine validity of last API call.
 type APICallInfo struct {
 	Time        time.Time
 	Coordinates geolocation.Coordinates
 }
 
+// Determines home directory in order to create vaporwair
+// directory to cache forecasts and call data.
 func GetHomeDir() (string, error) {
 	usr, err := user.Current()
 	return usr.HomeDir, err
 }
 
+// exists returns whether the given file or directory exists
 func exists(path string) (bool, error) {
 	_, err := os.Stat(path)
-       if err == nil { return true, nil }
-       if os.IsNotExist(err) { return false, nil }
-       return true, err
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return true, err
 }
 
-// exists returns whether the given file or directory exists
+// Creates a directory to cache forecasts and call data
+// if that directory does not already exist.
 func CreateVaporwairDir(path string) {
 	d, err := exists(path)
 	if err != nil {
@@ -55,6 +64,7 @@ func CreateVaporwairDir(path string) {
 	}
 }
 
+// Loads previous weather forecast.
 func LoadSavedWeather(path string) (weather.Forecast, error) {
 	var f weather.Forecast
 	b, err := ioutil.ReadFile(path)
@@ -68,6 +78,7 @@ func LoadSavedWeather(path string) (weather.Forecast, error) {
 	return f, nil
 }
 
+// Loads previous air quality forecast.
 func LoadSavedAir(path string) ([]air.Forecast, error) {
 	var f []air.Forecast
 	b, err := ioutil.ReadFile(path)
@@ -81,7 +92,7 @@ func LoadSavedAir(path string) ([]air.Forecast, error) {
 	return f, nil
 }
 
-// Checks home folder for vaporwair config file to retrieve API Keys
+// Checks home folder for vaporwair config file to retrieve API keys.
 func GetConfig(filepath string) Config {
 	configFile, err := os.Open(filepath)
 	if err != nil {
@@ -100,16 +111,11 @@ func GetConfig(filepath string) Config {
 	return config
 }
 
-// Has the forecast expired?
-func expired(t time.Time, duration float64) bool {
-	return time.Since(t).Minutes() > duration
-}
-
 func UpdateLastCall(c geolocation.Coordinates, path string) error {
 	// After call, save report.
 	newCallInfo := APICallInfo{
-		Time:      time.Now(),
-		Coordinates:  c,
+		Time:        time.Now(),
+		Coordinates: c,
 	}
 	err := SaveCall(path, newCallInfo)
 	if err != nil {
@@ -174,11 +180,3 @@ func SaveAirForecast(path string, a []air.Forecast) bool {
 	}
 	return true
 }
-
-
-// Has the forecast expired?
-func Expired(t time.Time, duration float64) bool {
-	return time.Since(t).Minutes() > duration
-}
-
-
