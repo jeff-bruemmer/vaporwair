@@ -1,8 +1,7 @@
 # Vaporwair
 Fast weather and air quality reports in your terminal.  
 
-![alt text][anemometer]
-[anemometer]: https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.svg "Anemometer"
+![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.png "Anemometer")
 
 
 ## Rationale
