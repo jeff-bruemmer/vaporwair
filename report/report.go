@@ -38,6 +38,7 @@ var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags
 var f1 = "%s:\t%.0f %s at %v %s\n"
 var f2 = "%s:\t%.0f %s\n"
 var f3 = "%s:\t%v %s\n"
+var f4 = "%s:\t%v %s %s\n"
 
 // Adds title frame
 func Title(t string) string {
@@ -140,10 +141,6 @@ func Visibility(f weather.Forecast) {
 }
 
 // Format 3
-func AirQualityIndex(f []air.Forecast) {
-	fmt.Fprintf(TW, f3, "AQI", f[0].AQI, f[0].Category.Name)
-}
-
 // Sunrise prints the time the sun rises.
 func Sunrise(f weather.Forecast) {
 	fmt.Fprintf(TW, f3, "Sunrise", FormatTime(f.Daily.Data[0].SunriseTime), hm)
@@ -152,4 +149,29 @@ func Sunrise(f weather.Forecast) {
 // Sunset prints the time the sun sets.
 func Sunset(f weather.Forecast) {
 	fmt.Fprintf(TW, f3, "Sunset", FormatTime(f.Daily.Data[0].SunsetTime), hm)
+}
+
+// Format 4
+// AirQualityIndex takes a forecast and lists the highest AQI index
+// and its particle type and category.
+func AirQualityIndex(f []air.Forecast) {
+	today := f[0].DateForecast
+	var aqi int
+	var particle string
+	var category string
+	for _, measurement := range f {
+		// We are only interested in the highest AQI for today.
+		if measurement.DateForecast != today {
+			break
+		}
+
+		// If that measurement exceeds that of the other reigning particle,
+		// a new pollutant is crowned.
+		if measurement.AQI > aqi {
+			aqi = measurement.AQI
+			particle = measurement.ParameterName
+			category = measurement.Category.Name
+		}
+	}
+	fmt.Fprintf(TW, f4, "Air Quality Index", aqi, particle, category)
 }
