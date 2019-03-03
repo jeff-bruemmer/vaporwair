@@ -1,7 +1,7 @@
 # Vaporwair
 Fast weather and air quality reports in your terminal.  
 
-![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer-medium.png "Anemometer")
+![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.png "Anemometer")
 
 ## Rationale
 I wanted to be able to be able to pop open a terminal and get air quality and weather reports as quickly as possible. I'm a fan of the text interface and command line programs in general, and the weather makes a good case. I chose to write it in go both for its command line and os facilities as well as its concurrency model.
