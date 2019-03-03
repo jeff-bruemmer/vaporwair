@@ -144,20 +144,12 @@ func AirQualityIndex(f []air.Forecast) {
 	fmt.Fprintf(TW, f3, "AQI", f[0].AQI, f[0].Category.Name)
 }
 
+// Sunrise prints the time the sun rises.
 func Sunrise(f weather.Forecast) {
 	fmt.Fprintf(TW, f3, "Sunrise", FormatTime(f.Daily.Data[0].SunriseTime), hm)
 }
 
+// Sunset prints the time the sun sets.
 func Sunset(f weather.Forecast) {
 	fmt.Fprintf(TW, f3, "Sunset", FormatTime(f.Daily.Data[0].SunsetTime), hm)
-}
-
-func Today(wf weather.Forecast, af []air.Forecast) {
-	CurrentTemp(wf)
-	MinTemp(wf)
-	MaxTemp(wf)
-	AirQualityIndex(af)
-	Precipitation(wf)
-	Sunrise(wf)
-	Sunset(wf)
 }

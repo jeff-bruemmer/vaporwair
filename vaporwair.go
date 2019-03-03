@@ -19,6 +19,7 @@ var weatherForecast weather.Forecast
 var airForecast []air.Forecast
 var config storage.Config
 
+// Timeout, an int representing minutes, determines how long a forecast is valid.
 const Timeout = 5
 
 // Is the forecast still valid? Specify a timeout duration (in minutes) that determines whether or not
@@ -27,12 +28,15 @@ func isValid(t time.Time, timeout float64) bool {
 	return time.Since(t).Minutes() < timeout
 }
 
+// Assign commandline flags.
 func init() {
 	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour.")
 	flag.BoolVar(&weatherWeek, "w", false, "Prints daily weather forecast for the next week.")
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
 }
 
+// runReports determines which report to run based on flags.
+// Only one report can be run at a time.
 func runReports(f weather.Forecast, a []air.Forecast) {
 	switch {
 	case weatherHourly:
@@ -46,6 +50,8 @@ func runReports(f weather.Forecast, a []air.Forecast) {
 	}
 }
 
+// GetCoordinates retrieves user's current coordinates via IP address
+// and the IP-API.
 func GetCoordinates() geolocation.Coordinates {
 	// Get geolocation data.
 	geoData := geolocation.GetGeoData(geolocation.IPAPIAddress)
