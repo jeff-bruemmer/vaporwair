@@ -7,7 +7,9 @@ import (
 )
 
 func WeatherHourly(w weather.Forecast, a []air.Forecast) {
-	//format := "%v\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\n"
+	fmt.Println(Title("Hourly Summary"))
+	fmt.Println(AddPeriod(w.Hourly.Summary))
+	fmt.Println()
 	format := "%v\t%.0f %s\t%.0f %s\t%.0f %s\t%.2f %s\t%.0f %s\n"
 	fmt.Fprintf(TW, "Hour\tTemp\tFeels Like\tPrecip\tIntensity\tWind\n")
 	fmt.Fprintf(TW, "----\t----\t----------\t------\t---------\t----\n")

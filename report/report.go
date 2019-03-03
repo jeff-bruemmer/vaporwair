@@ -21,6 +21,14 @@ const (
 	flags    = 0
 )
 
+// Formats
+var tu = "°F"
+var hm = "HH:MM"
+var wu = "mph"
+var pu = "atm"
+var du = "miles"
+var pc = "%"
+
 // Separator separates report summaries from tables.
 var Separator = "+++"
 
@@ -30,6 +38,11 @@ var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags
 var f1 = "%s:\t%.0f %s at %v %s\n"
 var f2 = "%s:\t%.0f %s\n"
 var f3 = "%s:\t%v %s\n"
+
+// Adds title frame
+func Title(t string) string {
+	return "-- " + strings.ToUpper(t) + " --"
+}
 
 // Adds space padding
 func Pad(v int) string {
@@ -72,14 +85,6 @@ func LimitData(d []weather.DataPoint, l int) []weather.DataPoint {
 		return d
 	}
 }
-
-// Formats
-var tu = "°F"
-var hm = "HH:MM"
-var wu = "mph"
-var pu = "atm"
-var du = "miles"
-var pc = "%"
 
 // Format 1
 func MinTemp(f weather.Forecast) {
