@@ -13,18 +13,22 @@ import (
 	"time"
 )
 
+// Timeout, an int representing minutes, determines how long a forecast is valid.
+const Timeout = 5
+
+// Flags
 var weatherHourly bool
 var weatherWeek bool
 var airQuality bool
+
+// Globals
 var weatherForecast weather.Forecast
 var airForecast []air.Forecast
 var config storage.Config
-var reportsReady bool
 
+// Variables used to sync spinner.
+var reportsReady = false
 var spinnerChan = make(chan time.Time)
-
-// Timeout, an int representing minutes, determines how long a forecast is valid.
-const Timeout = 5
 
 // Is the forecast still valid? Specify a timeout duration (in minutes) that determines whether or not
 // the forecast is still valid.
@@ -32,6 +36,10 @@ func isValid(t time.Time, timeout float64) bool {
 	return time.Since(t).Minutes() < timeout
 }
 
+// Basic Spinner with zero connection to reality.
+// Its purpose is to show the user the program is running.
+// It returns a time once it finds the the reports are ready to print.
+// That time is put in a channel used to terminate the spinner.
 func Spinner(t time.Time) time.Time {
 	meterInit := "\r[=>                                               ]"
 	meter := meterInit
@@ -42,22 +50,25 @@ func Spinner(t time.Time) time.Time {
 		time.Sleep(50 * time.Millisecond)
 		meter = strings.Replace(meter, "> ", "=>", 1)
 		fmt.Printf(meter)
-		if i == len(meterInit)-6 {
+		// Loop spinner if it completes before the reports have returned
+		if i == len(meterInit)-1 {
 			i = 0
 			meter = meterInit
 		}
 	}
+	// Clear the line.
 	fmt.Printf("\r                                                      ")
 	return t
 }
 
+// Prints the time it took to download (or retrieve from disk) the forecasts.
 func PrintElapsedTime(t time.Time) {
 	fmt.Printf("\rForecasts fetched in %v seconds.\n", time.Since(t).Seconds())
 }
 
 // runReports determines which report to run based on flags.
 // Only one report can be run at a time.
-func runReports(f weather.Forecast, a []air.Forecast) {
+func RunReports(f weather.Forecast, a []air.Forecast) {
 	switch {
 	case weatherHourly:
 		report.WeatherHourly(f, a)
@@ -106,7 +117,7 @@ func RunReportsForFirstTime(c geolocation.Coordinates, t time.Time) (weather.For
 	t1 := <-spinnerChan
 	close(spinnerChan)
 	PrintSpaceTime(t, t1, c)
-	runReports(weatherForecast, airForecast)
+	RunReports(weatherForecast, airForecast)
 	report.TW.Flush()
 	return weatherForecast, airForecast
 }
@@ -120,6 +131,15 @@ func SaveForecasts(homeDir string, coordinates geolocation.Coordinates, weather 
 	storage.SaveAirForecast(homeDir+storage.SavedAirFileName, airForecast)
 }
 
+func CaptureAPIkeys() {
+	DSAPIKey := storage.Capture("Enter Dark Sky API key: ")
+	ANAPIKey := storage.Capture("Enter Air Now API key: ")
+	err = storage.CreateConfig(homeDir, DSAPIKey, ANAPIKey)
+	if err != nil {
+		log.Fatal("There was a problem saving your APIkeys.")
+	}
+}
+
 // Assign commandline flags.
 func init() {
 	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour.")
@@ -127,47 +147,46 @@ func init() {
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
 }
 
+// The main function is large for a go program. I've kept it as is in order
+// to give an overview of the program's execution.
 func main() {
 	t := time.Now()
-	reportsReady = false
+	// Start call to IP-API in case previously used coordinates either
+	// do not exist or are invalid.
+	geoChan := make(chan geolocation.GeoData)
+	go func() {
+		geoChan <- geolocation.GetGeoData(geolocation.IPAPIAddress)
+	}()
+
+	// Start Spinner
 	go func() {
 		spinnerChan <- Spinner(t)
 	}()
+
 	// Parse flags to determine which report to run.
 	flag.Parse()
+
 	// First get home directory for user.
 	homeDir, err := storage.GetHomeDir()
-
-	// If the home directory could not be determined, get coordinates
-	// then call APIs, run reports, and exit.
+	// If the home directory could not be determined, bail.
 	if err != nil {
-		RunReportsForFirstTime(GetCoordinates(), t)
-		// Since no home directory was found, skip caching forecast and exit.
-		return
+		log.Fatal("Unable to determine home directory.")
 	}
 
 	// Identify or create vaporwair directory.
 	storage.CreateVaporwairDir(homeDir + storage.VaporwairDir)
 
-	// Create or get Config
+	// Check if configuration file with API keys exists.
 	cf := homeDir + storage.ConfigFileName
-
 	configExists, _ := storage.Exists(cf)
-	if !configExists {
-		DSAPIKey := storage.Capture("Enter Dark Sky API key: ")
-		ANAPIKey := storage.Capture("Enter Air Now API key: ")
-		err = storage.CreateConfig(homeDir, DSAPIKey, ANAPIKey)
-		if err != nil {
-			log.Fatal("There was a problem saving your APIkeys.")
-		}
-	}
-	config = storage.GetConfig(cf)
 
-	// Get Coordinates from IP-API
-	geoChan := make(chan geolocation.GeoData)
-	go func() {
-		geoChan <- geolocation.GetGeoData(geolocation.IPAPIAddress)
-	}()
+	// If not, prompt user for API keys and create configuration file.
+	if !configExists {
+		CaptureAPIKeys()
+	}
+
+	// Load API keys
+	config = storage.GetConfig(cf)
 
 	// Channels to store calls with newly confirmed coordinates
 	airChan := make(chan []air.Forecast)
@@ -188,14 +207,14 @@ func main() {
 
 	// If the previous air and weather forecasts are still valid
 	// i.e. they were made within the timeout period suppplied to the isValid function
-	// (presumably from the same location), print forecast report and return
+	// (presumably from the same location), print forecast report and return.
 	if valid {
-		// Load previous weather forecast from disk
+		// Load previous weather forecast from disk.
 		pwf, err := storage.LoadSavedWeather(homeDir + storage.SavedWeatherFileName)
 		if err != nil {
 			fmt.Println("No previous weather forecast found.")
 		}
-		// Load previous air forecast from disk
+		// Load previous air forecast from disk.
 		paf, err := storage.LoadSavedAir(homeDir + storage.SavedAirFileName)
 		if err != nil {
 			fmt.Println("No previous air forecast found.")
@@ -204,15 +223,15 @@ func main() {
 		reportsReady = true
 		t1 := <-spinnerChan
 		PrintSpaceTime(t, t1, pc.Coordinates)
-		runReports(pwf, paf)
+		RunReports(pwf, paf)
 		report.TW.Flush()
 		return
 	}
 
-	// Assume user has not changed coordinates since last weather check
+	// While waiting for the coordinates to return form the IP-API,
+	// assume user has not changed coordinates since last weather check
 	// and make optimistic call to APIs using saved coordinates.
 	odsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, pc.Coordinates, weather.DarkSkyUnits)
-	// build AirNowURL
 	oanURL := air.BuildAirNowURL(air.AirNowAddress, pc.Coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
 
 	// optimistic channels
@@ -231,7 +250,8 @@ func main() {
 	coordinates := geolocation.FormatCoordinates(geoData)
 
 	// If current coordinates match previous coordinates, the optimistic API calls
-	// are valid, no need to make new calls.
+	// are valid, no need to make new calls. Clean up, print reports, save forecasts,
+	// and return.
 	if coordinates.Latitude == pc.Coordinates.Latitude &&
 		coordinates.Longitude == pc.Coordinates.Longitude {
 		weatherForecast = <-ow
@@ -242,16 +262,16 @@ func main() {
 		t1 := <-spinnerChan
 		close(spinnerChan)
 		PrintSpaceTime(t, t1, coordinates)
-		runReports(weatherForecast, airForecast)
+		RunReports(weatherForecast, airForecast)
 		report.TW.Flush()
 		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
 		return
 	} else {
 		// If coordinates returned by IP-API call differ from coordinates in saved forecast,
 		// user is in a new location, and calls with the updated coordinates need to be made.
-		// build DarkSkyURL
+
+		// Build URLs.
 		dsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, coordinates, weather.DarkSkyUnits)
-		// build AirNowURL
 		anURL := air.BuildAirNowURL(air.AirNowAddress, coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
 
 		// Asynchronously make calls to Dark Sky and Airnow with confirmed coordinates
@@ -262,6 +282,7 @@ func main() {
 			airChan <- air.GetForecast(anURL)
 		}()
 
+		// Wait for forecasts to return, then clean up, print reports, save forecasts, and return.
 		weatherForecast = <-weatherChan
 		close(weatherChan)
 		airForecast = <-airChan
@@ -270,10 +291,11 @@ func main() {
 		t1 := <-spinnerChan
 		close(spinnerChan)
 		PrintSpaceTime(t, t1, coordinates)
-		runReports(weatherForecast, airForecast)
+		RunReports(weatherForecast, airForecast)
 		report.TW.Flush()
 
 		// Save forecasts
 		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
+		return
 	}
 }
