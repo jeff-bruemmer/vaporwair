@@ -9,6 +9,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/storage"
 	"github.com/jeff-bruemmer/vaporwair/weather"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -18,6 +19,9 @@ var airQuality bool
 var weatherForecast weather.Forecast
 var airForecast []air.Forecast
 var config storage.Config
+var reportsReady bool
+
+var spinnerChan = make(chan time.Time)
 
 // Timeout, an int representing minutes, determines how long a forecast is valid.
 const Timeout = 5
@@ -28,11 +32,27 @@ func isValid(t time.Time, timeout float64) bool {
 	return time.Since(t).Minutes() < timeout
 }
 
-// Assign commandline flags.
-func init() {
-	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour.")
-	flag.BoolVar(&weatherWeek, "w", false, "Prints daily weather forecast for the next week.")
-	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
+func Spinner(t time.Time) time.Time {
+	meterInit := "\r[=>                                               ]"
+	meter := meterInit
+	for i := 0; i <= len(meterInit)-6; i++ {
+		if reportsReady {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+		meter = strings.Replace(meter, "> ", "=>", 1)
+		fmt.Printf(meter)
+		if i == len(meterInit)-6 {
+			i = 0
+			meter = meterInit
+		}
+	}
+	fmt.Printf("\r                                                      ")
+	return t
+}
+
+func PrintElapsedTime(t time.Time) {
+	fmt.Printf("\rForecasts fetched in %v seconds.\n", time.Since(t).Seconds())
 }
 
 // runReports determines which report to run based on flags.
@@ -59,6 +79,12 @@ func GetCoordinates() geolocation.Coordinates {
 	return geolocation.FormatCoordinates(geoData)
 }
 
+func PrintSpaceTime(t, t1 time.Time, c geolocation.Coordinates) {
+	PrintElapsedTime(t1)
+	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
+	fmt.Println(c.City, c.Zip, "|", c.Latitude, ",", c.Longitude)
+}
+
 func RunReportsForFirstTime(c geolocation.Coordinates, t time.Time) (weather.Forecast, []air.Forecast) {
 	dsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, c, weather.DarkSkyUnits)
 	// build AirNowURL
@@ -76,6 +102,10 @@ func RunReportsForFirstTime(c geolocation.Coordinates, t time.Time) (weather.For
 	close(weatherChan)
 	airForecast = <-airChan
 	close(airChan)
+	reportsReady = true
+	t1 := <-spinnerChan
+	close(spinnerChan)
+	PrintSpaceTime(t, t1, c)
 	runReports(weatherForecast, airForecast)
 	report.TW.Flush()
 	return weatherForecast, airForecast
@@ -90,10 +120,19 @@ func SaveForecasts(homeDir string, coordinates geolocation.Coordinates, weather 
 	storage.SaveAirForecast(homeDir+storage.SavedAirFileName, airForecast)
 }
 
+// Assign commandline flags.
+func init() {
+	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour.")
+	flag.BoolVar(&weatherWeek, "w", false, "Prints daily weather forecast for the next week.")
+	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
+}
+
 func main() {
-	// Print time in order to signal program start and get date for building AirNow Url.
 	t := time.Now()
-	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
+	reportsReady = false
+	go func() {
+		spinnerChan <- Spinner(t)
+	}()
 	// Parse flags to determine which report to run.
 	flag.Parse()
 	// First get home directory for user.
@@ -162,7 +201,9 @@ func main() {
 			fmt.Println("No previous air forecast found.")
 			paf = <-airChan
 		}
-
+		reportsReady = true
+		t1 := <-spinnerChan
+		PrintSpaceTime(t, t1, pc.Coordinates)
 		runReports(pwf, paf)
 		report.TW.Flush()
 		return
@@ -188,7 +229,6 @@ func main() {
 	// Get geolocation data from channel and extract coordinates.
 	geoData := <-geoChan
 	coordinates := geolocation.FormatCoordinates(geoData)
-	fmt.Println(coordinates.City, coordinates.Zip, "|", coordinates.Latitude, ",", coordinates.Longitude)
 
 	// If current coordinates match previous coordinates, the optimistic API calls
 	// are valid, no need to make new calls.
@@ -198,6 +238,10 @@ func main() {
 		close(ow)
 		airForecast = <-oa
 		close(oa)
+		reportsReady = true
+		t1 := <-spinnerChan
+		close(spinnerChan)
+		PrintSpaceTime(t, t1, coordinates)
 		runReports(weatherForecast, airForecast)
 		report.TW.Flush()
 		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
@@ -222,6 +266,10 @@ func main() {
 		close(weatherChan)
 		airForecast = <-airChan
 		close(airChan)
+		reportsReady = true
+		t1 := <-spinnerChan
+		close(spinnerChan)
+		PrintSpaceTime(t, t1, coordinates)
 		runReports(weatherForecast, airForecast)
 		report.TW.Flush()
 

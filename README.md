@@ -7,7 +7,7 @@ Fast weather and air quality reports in your terminal.
 I wanted to be able to be able to pop open a terminal and get air quality and weather reports as quickly as possible. I'm a fan of the text interface and command line programs in general, and the weather makes a good case. I chose to write it in go both for its command line and os facilities as well as its concurrency model.
 
 ## How Vaporwair Works
-Weather gets your coordinates using your IP address, calls the Dark Sky and AirNow APIs to get location based-weather and air quality reports.
+Weather gets your coordinates using your IP address, calls the Dark Sky and AirNow APIs to get location based-weather and air quality forecasts, then prints one of several reports, specified by a flag.
 
 ## On Vaporwair Speed
 1. To prevent needless network calls, Vaporwair determines if you made a call within the last five minutes. If so, it assumes the data is still valid, and Vaporwair executes reports using the last stored call. This shortcut assumes your coordinates have not meaningfully changed in the last minute.
@@ -15,6 +15,11 @@ Weather gets your coordinates using your IP address, calls the Dark Sky and AirN
 3. Also meanwhile, Vaporwair is calling the ip-api to obtain your current coordinates.
 4. After aquiring your coordinates, Vaporwair compares the coordinates to those used for the first, greedy call to the APIs in step 2. If the coordinates match, the forecast is valid for your location and Vaporwair executes the report. If not...
 5. Vaporwair calls the APIs with your updated coordinates and executes the report.
+
+## Design Constraints
+- No external libraries.
+- Reports must fit in unmaximized terminal to avoid the need to scroll up to read beginning of report.
+- Only one report can be run at a time.
 
 ## Reports
 
