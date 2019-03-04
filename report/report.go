@@ -39,6 +39,7 @@ var f1 = "%s:\t%.0f %s at %v %s\n"
 var f2 = "%s:\t%.0f %s\n"
 var f3 = "%s:\t%v %s\n"
 var f4 = "%s:\t%v %s %s\n"
+var f5 = "%s:\t%s\n"
 
 // Adds title frame
 func Title(t string) string {
@@ -174,4 +175,11 @@ func AirQualityIndex(f []air.Forecast) {
 		}
 	}
 	fmt.Fprintf(TW, f4, "Air Quality Index", aqi, particle, category)
+}
+
+// Format 5
+
+// Prints the summary for the day
+func DailySummary(f weather.Forecast) {
+	fmt.Fprintf(TW, f5, "Summary", f.Currently.Summary)
 }
