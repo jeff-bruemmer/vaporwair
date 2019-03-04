@@ -131,13 +131,36 @@ func SaveForecasts(homeDir string, coordinates geolocation.Coordinates, weather 
 	storage.SaveAirForecast(homeDir+storage.SavedAirFileName, airForecast)
 }
 
-func CaptureAPIkeys() {
+func CaptureAPIKeys(homeDir string) {
 	DSAPIKey := storage.Capture("Enter Dark Sky API key: ")
 	ANAPIKey := storage.Capture("Enter Air Now API key: ")
-	err = storage.CreateConfig(homeDir, DSAPIKey, ANAPIKey)
+	err := storage.CreateConfig(homeDir, DSAPIKey, ANAPIKey)
 	if err != nil {
 		log.Fatal("There was a problem saving your APIkeys.")
 	}
+}
+
+func CleanPrintSave(weatherChan chan weather.Forecast, airChan chan []air.Forecast, t time.Time, c geolocation.Coordinates, homeDir string) {
+	// Wait for forecasts, then close channels.
+	weatherForecast = <-weatherChan
+	close(weatherChan)
+	airForecast = <-airChan
+	close(airChan)
+
+	// Stop Spinner
+	reportsReady = true
+	t1 := <-spinnerChan
+	close(spinnerChan)
+
+	// Print time and geodata, then print reports.
+	PrintSpaceTime(t, t1, c)
+	RunReports(weatherForecast, airForecast)
+	report.TW.Flush()
+
+	// Save forecasts
+	SaveForecasts(homeDir, c, weatherForecast, airForecast)
+	return
+
 }
 
 // Assign commandline flags.
@@ -147,7 +170,7 @@ func init() {
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
 }
 
-// The main function is large for a go program. I've kept it as is in order
+// The main function is large for a Go program. I've kept it as is in order
 // to give an overview of the program's execution.
 func main() {
 	t := time.Now()
@@ -182,7 +205,7 @@ func main() {
 
 	// If not, prompt user for API keys and create configuration file.
 	if !configExists {
-		CaptureAPIKeys()
+		CaptureAPIKeys(homeDir)
 	}
 
 	// Load API keys
@@ -254,17 +277,7 @@ func main() {
 	// and return.
 	if coordinates.Latitude == pc.Coordinates.Latitude &&
 		coordinates.Longitude == pc.Coordinates.Longitude {
-		weatherForecast = <-ow
-		close(ow)
-		airForecast = <-oa
-		close(oa)
-		reportsReady = true
-		t1 := <-spinnerChan
-		close(spinnerChan)
-		PrintSpaceTime(t, t1, coordinates)
-		RunReports(weatherForecast, airForecast)
-		report.TW.Flush()
-		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
+		CleanPrintSave(ow, oa, t, coordinates, homeDir)
 		return
 	} else {
 		// If coordinates returned by IP-API call differ from coordinates in saved forecast,
@@ -283,19 +296,7 @@ func main() {
 		}()
 
 		// Wait for forecasts to return, then clean up, print reports, save forecasts, and return.
-		weatherForecast = <-weatherChan
-		close(weatherChan)
-		airForecast = <-airChan
-		close(airChan)
-		reportsReady = true
-		t1 := <-spinnerChan
-		close(spinnerChan)
-		PrintSpaceTime(t, t1, coordinates)
-		RunReports(weatherForecast, airForecast)
-		report.TW.Flush()
-
-		// Save forecasts
-		SaveForecasts(homeDir, coordinates, weatherForecast, airForecast)
+		CleanPrintSave(weatherChan, airChan, t, coordinates, homeDir)
 		return
 	}
 }
