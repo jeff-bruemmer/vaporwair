@@ -23,6 +23,77 @@ Weather gets your coordinates using your IP address, calls the Dark Sky and AirN
 
 ## Reports
 
+### Summary
+The default report.
+```
+Summary:              Partly Cloudy
+Current Temperature:  61 °F
+Min Temperature:      51 °F at 23:00 HH:MM
+Max Temperature:      61 °F at 15:00 HH:MM
+Humidity:             74 %
+Windspeed:            3 mph
+Air Quality Index:    33 PM2.5 Good
+Precipitation:        69 %
+Precip Type:          rain 
+Sunrise:              06:15 HH:MM
+Sunset:               17:55 HH:MM
+```
+
+### Hourly Weather
+```
+Partly cloudy until tomorrow afternoon.
+
+Hour      Temp      Feels Like  Precip    Intensity  Wind
+----      ----      ----------  ------    ---------  ----
+16:00     61 °F     61 °F       0 %       0.00 mmph  6 mph
+17:00     59 °F     59 °F       0 %       0.00 mmph  5 mph
+18:00     57 °F     57 °F       0 %       0.00 mmph  5 mph
+19:00     55 °F     55 °F       8 %       0.21 mmph  6 mph
+20:00     54 °F     54 °F       5 %       0.11 mmph  7 mph
+21:00     53 °F     53 °F       7 %       0.27 mmph  6 mph
+22:00     52 °F     52 °F       10 %      0.45 mmph  5 mph
+23:00     51 °F     51 °F       12 %      0.46 mmph  6 mph
+00:00     51 °F     51 °F       11 %      0.42 mmph  6 mph
+01:00     50 °F     50 °F       10 %      0.36 mmph  7 mph
+02:00     50 °F     47 °F       12 %      0.61 mmph  6 mph
+03:00     50 °F     48 °F       6 %       0.15 mmph  6 mph
+```
+
+### Weekly Weather
+```
+Light rain today, with high temperatures bottoming out at 60°F on Sunday.
+
+Day       Min       Max       Precip    Type      Humidity  Wind
+---       ---       ---       ------    ----      --------  ----
+Thu       51 °F     61 °F     69 %      rain      74 %      3 mph
+Fri       49 °F     60 °F     31 %      rain      55 %      6 mph
+Sat       47 °F     61 °F     8 %       rain      52 %      1 mph
+Sun       49 °F     60 °F     35 %      rain      57 %      2 mph
+Mon       47 °F     65 °F     13 %      rain      46 %      1 mph
+Tue       47 °F     65 °F     28 %      rain      50 %      1 mph
+Wed       50 °F     66 °F     4 %       rain      35 %      7 mph
+```
+
+### Air Quality Report
+```
+2019-03-07 
+==========
+Type      AQI       Category  Description
+----      ---       --------  -----------
+O3        26        1         Good
+PM2.5     33        1         Good
+PM10      10        1         Good
+NO2       23        1         Good
+CO        6         1         Good
+
+2019-03-08 
+==========
+O3        23        1         Good
+PM2.5     21        1         Good
+PM10      9         1         Good
+NO2       23        1         Good
+CO        3         1         Good
+```
 
 ## Setup
 1. Get API keys 

@@ -36,24 +36,24 @@ func isValid(t time.Time, timeout float64) bool {
 	return time.Since(t).Minutes() < timeout
 }
 
-// Basic Spinner with zero connection to reality.
+// Spinner creates a basic loading bar with zero connection to reality.
 // Its purpose is to show the user the program is running.
 // It returns a time once it finds the the reports are ready to print.
 // That time is put in a channel used to terminate the spinner.
 func Spinner(t time.Time) time.Time {
 	meterInit := "\r[=>                                               ]"
 	meter := meterInit
-	for i := 0; i <= len(meterInit)-6; i++ {
+	for i := 0; i <= len(meterInit)-1; i++ {
 		if reportsReady {
 			break
 		}
-		time.Sleep(50 * time.Millisecond)
+		// Set the interval to add another =.
+		time.Sleep(100 * time.Millisecond)
 		meter = strings.Replace(meter, "> ", "=>", 1)
 		fmt.Printf(meter)
 		// Loop spinner if it completes before the reports have returned
 		if i == len(meterInit)-1 {
-			i = 0
-			meter = meterInit
+			log.Fatal("There was a problem getting your forecast. Please check your internet connection.")
 		}
 	}
 	// Clear the line.
@@ -66,7 +66,7 @@ func PrintElapsedTime(t time.Time) {
 	fmt.Printf("\rForecasts fetched in %v seconds.\n", time.Since(t).Seconds())
 }
 
-// runReports determines which report to run based on flags.
+// RunReports determines which report to run based on flags.
 // Only one report can be run at a time.
 func RunReports(f weather.Forecast, a []air.Forecast) {
 	switch {
@@ -122,6 +122,7 @@ func RunReportsForFirstTime(c geolocation.Coordinates, t time.Time) (weather.For
 	return weatherForecast, airForecast
 }
 
+// Saves forecast in Vaporwair home directory for caching.
 func SaveForecasts(homeDir string, coordinates geolocation.Coordinates, weather weather.Forecast, air []air.Forecast) {
 	// Update last api call
 	storage.UpdateLastCall(coordinates, homeDir+storage.SavedCallFileName)
@@ -131,6 +132,8 @@ func SaveForecasts(homeDir string, coordinates geolocation.Coordinates, weather 
 	storage.SaveAirForecast(homeDir+storage.SavedAirFileName, airForecast)
 }
 
+// CaptureAPIKeys prompts users for Dark Sky and Air Now API keys
+// and saves thems in a config file.
 func CaptureAPIKeys(homeDir string) {
 	DSAPIKey := storage.Capture("Enter Dark Sky API key: ")
 	ANAPIKey := storage.Capture("Enter Air Now API key: ")
@@ -140,6 +143,8 @@ func CaptureAPIKeys(homeDir string) {
 	}
 }
 
+// CleanPrintSave closes open air, weather, and spinner channels; prints reports;
+// and saves the forecasts for future reporting.
 func CleanPrintSave(weatherChan chan weather.Forecast, airChan chan []air.Forecast, t time.Time, c geolocation.Coordinates, homeDir string) {
 	// Wait for forecasts, then close channels.
 	weatherForecast = <-weatherChan
@@ -170,8 +175,8 @@ func init() {
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
 }
 
-// The main function is large for a Go program. I've kept it as is in order
-// to give an overview of the program's execution.
+// The main function is large for a Go program, but it provides a good
+// overview of the program's execution.
 func main() {
 	t := time.Now()
 	// Start call to IP-API in case previously used coordinates either
