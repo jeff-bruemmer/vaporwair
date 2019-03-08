@@ -26,7 +26,9 @@ Weather gets your coordinates using your IP address, calls the Dark Sky and AirN
 ### Summary
 The default report.
 ```
-Summary:              Partly Cloudy
+$ vaporwair
+This week:            Light rain today, with high temperatures bottoming out at 59°F on Sunday.
+Currently:            Partly Cloudy.
 Current Temperature:  61 °F
 Min Temperature:      51 °F at 23:00 HH:MM
 Max Temperature:      61 °F at 15:00 HH:MM
@@ -40,7 +42,9 @@ Sunset:               17:55 HH:MM
 ```
 
 ### Hourly Weather
+
 ```
+$ vaporwair -h
 Partly cloudy until tomorrow afternoon.
 
 Hour      Temp      Feels Like  Precip    Intensity  Wind
@@ -61,6 +65,7 @@ Hour      Temp      Feels Like  Precip    Intensity  Wind
 
 ### Weekly Weather
 ```
+$ vaporwair -w
 Light rain today, with high temperatures bottoming out at 60°F on Sunday.
 
 Day       Min       Max       Precip    Type      Humidity  Wind
@@ -76,6 +81,7 @@ Wed       50 °F     66 °F     4 %       rain      35 %      7 mph
 
 ### Air Quality Report
 ```
+vaporwair -a
 2019-03-07 
 ==========
 Type      AQI       Category  Description
@@ -112,11 +118,9 @@ Vaporwair requires two free API keys.
 ```
 Substitute your api keys for the values. 
 
-## Reports
-Run default weather and air quality report: run with no arguments.
-```
-> vaporwair
-```
-
+# Roadmap
+- Flag to re-enter API keys.
+- Option to specify standard international units.
+- Once design finalizes, tests and benchmarking.
 [Powered by Dark Sky](https://darksky.net/poweredby/) and [AirNow](https://airnow.gov/).
 

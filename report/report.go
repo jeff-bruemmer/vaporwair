@@ -60,7 +60,7 @@ func Pad(v int) string {
 	return strings.Join(b, "")
 }
 
-// Adds period to end of string.
+// Adds period to end of string, because the Dark sky summaries are punctuationally inconsistent.
 func AddPeriod(s string) string {
 	if strings.LastIndex(s, ".") != len(s)-1 {
 		return s + "."
@@ -179,7 +179,12 @@ func AirQualityIndex(f []air.Forecast) {
 
 // Format 5
 
-// Prints the summary for the day
+// Prints the summary for the day.
 func DailySummary(f weather.Forecast) {
-	fmt.Fprintf(TW, f5, "Summary", f.Currently.Summary)
+	fmt.Fprintf(TW, f5, "Currently", AddPeriod(f.Currently.Summary))
+}
+
+// Prints the summary for the week.
+func WeeklySummary(f weather.Forecast) {
+	fmt.Fprintf(TW, f5, "This week", AddPeriod(f.Daily.Summary))
 }

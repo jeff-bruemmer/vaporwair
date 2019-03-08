@@ -139,7 +139,7 @@ func CaptureAPIKeys(homeDir string) {
 	ANAPIKey := storage.Capture("Enter Air Now API key: ")
 	err := storage.CreateConfig(homeDir, DSAPIKey, ANAPIKey)
 	if err != nil {
-		log.Fatal("There was a problem saving your APIkeys.")
+		log.Fatal("There was a problem saving your APIkeys. Try again.")
 	}
 }
 

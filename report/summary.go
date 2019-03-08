@@ -7,6 +7,7 @@ import (
 
 // The default report.
 func Summary(w weather.Forecast, a []air.Forecast) {
+	WeeklySummary(w)
 	DailySummary(w)
 	CurrentTemp(w)
 	MinTemp(w)
