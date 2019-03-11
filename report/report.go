@@ -112,7 +112,7 @@ func Humidity(f weather.Forecast) {
 
 // Prints the windspeed average for the day.
 func Windspeed(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Windspeed", f.Daily.Data[0].WindSpeed, wu)
+
 }
 
 // Prints the average cloudcover as a percentage.
