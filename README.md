@@ -4,22 +4,22 @@ Fast weather and air quality reports in your terminal.
 ![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.png "Anemometer")
 
 ## Rationale
-I wanted to be able to be able to pop open a terminal and get air quality and weather reports as quickly as possible. I'm a fan of the text interface and command line programs in general, and the weather makes a good case. I chose to write it in go both for its command line and os facilities as well as its concurrency model.
-
-## How Vaporwair Works
-Weather gets your coordinates using your IP address, calls the Dark Sky and AirNow APIs to get location based-weather and air quality forecasts, then prints one of several reports, specified by a flag.
-
-## On Vaporwair Speed
-1. To prevent needless network calls, Vaporwair determines if you made a call within the last five minutes. If so, it assumes the data is still valid, and Vaporwair executes reports using the last stored call. This shortcut assumes your coordinates have not meaningfully changed in the last minute.
-2. Meanwhile, Vaporwair has already kicked off asynchronous API calls in case the stored data has expired vaporwair needs to retrieve a new forecast. This greedy call bets that the most recently used coordinates are your current coordinates. 
-3. Also meanwhile, Vaporwair is calling the ip-api to obtain your current coordinates.
-4. After aquiring your coordinates, Vaporwair compares the coordinates to those used for the first, greedy call to the APIs in step 2. If the coordinates match, the forecast is valid for your location and Vaporwair executes the report. If not...
-5. Vaporwair calls the APIs with your updated coordinates and executes the report.
+Get both air quality and weather reports in the terminal as quickly as possible. Written in Go for its command line and OS facilities as well as its concurrency model.
 
 ## Design Constraints
 - No external libraries.
 - Reports must fit in unmaximized terminal to avoid the need to scroll up to read beginning of report.
 - Only one report can be run at a time.
+
+## How Vaporwair Works
+Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location based-weather and air quality forecasts, then prints one of several reports, specified by a flag.
+
+## On Vaporwair Speed
+1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, it assumes the data is still valid, and Vaporwair executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
+2. Meanwhile, Vaporwair has already kicked off asynchronous API calls in case the stored data has expired vaporwair needs to retrieve a new forecast. This greedy call bets that the most recently used coordinates are your current coordinates. 
+3. Also meanwhile, Vaporwair is calling the IP-Api to obtain the current coordinates.
+4. After aquiring coordinates, Vaporwair compares the coordinates to those used for the first, optimistic call to the APIs in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 5).
+5. Vaporwair calls the APIs with the updated coordinates and executes the report.
 
 ## Reports
 
@@ -108,15 +108,13 @@ Vaporwair requires two free API keys.
 - [Dark Sky](https://darksky.net/dev): for weather reports.
 - [AirNow](https://docs.airnowapi.org/): for air quality reports from the Environmental Protection Agency.
 
-2. Create a config file called ".vaporwair-config.json"
+2. Download and install go.
 
-3. Save keys to your config file. The file should contain the following json string:
+3. Clone this repository.
 
-```
-{"darkskyapikey": "YOUR_DARK_SKY_API_KEY_HERE",
- "airnowapikey": "YOUR_AIRNOW_API_KEY_HERE"}
-```
-Substitute your api keys for the values. 
+4. Change to this repository’s directory, and run go install. Make sure your terminal has the go bin directory in its $PATH.
+
+5. Run `vaporwair` and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
 
 # Roadmap
 - Flag to re-enter API keys.
