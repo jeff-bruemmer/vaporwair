@@ -115,12 +115,12 @@ Vaporwair requires two free API keys:
 
 5. Run `vaporwair` and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
 
-# Roadmap
+## Roadmap
 - Improve entry of API keys with confirmation. Possibly a flag to re-enter API keys.
 - Add a flag to specify and configure standard international units.
 - Once design finalizes, tests, benchmarking, and documentation upkeep.
 
-# License
+## License
 M.I.T.
 
 [Powered by Dark Sky](https://darksky.net/poweredby/) and [AirNow](https://airnow.gov/).
