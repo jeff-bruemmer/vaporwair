@@ -14,7 +14,7 @@ Most weather reports do not include air quality, and both air quality and weathe
 ## How Vaporwair Works
 Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
 
-## On Vaporwair Speed
+### On Vaporwair Speed
 1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
 2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates. 
 3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the coordinates to those used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
