@@ -4,7 +4,7 @@ Fast weather and air quality reports in your terminal.
 ![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.png "Anemometer")
 
 ## Rationale
-Most weather reports do not include air quality, and both require visiting one or multiple web pages to get detailed information, which is slow. Vaporwair retrieves both air quality and weather reports in the terminal as quickly as possible. Written in Go, both for its command line and OS facilities, as well as its concurrency model.
+Most weather reports do not include air quality, and both air quality and weather services require visiting multiple web pages to get detailed information, which is slow. Vaporwair retrieves both forecasts in the terminal as quickly as possible. It’s written in Go, both for Go’s commandline and OS facilities, as well as its concurrency model.
 
 ## Design Constraints
 - No external libraries.
@@ -12,15 +12,15 @@ Most weather reports do not include air quality, and both require visiting one o
 - Only one report can be run at a time.
 
 ## How Vaporwair Works
-Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location based-weather and air quality forecasts, then prints one of several reports, specified by a flag.
+Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
 
 ## On Vaporwair Speed
 1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
-2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes one optimistic call to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates. 
-3. After acquiring updated coordinates, Vaporwair compares the coordinates to those used for the first, optimistic call to the APIs in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
-4. Vaporwair calls the APIs with the updated coordinates and executes the report.
+2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates. 
+3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the coordinates to those used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
+4. Vaporwair asynchronously calls the APIs with the updated coordinates and executes the report.
 
-## Reports
+## Sample Reports
 
 ### Summary
 The default report.
@@ -107,17 +107,21 @@ Vaporwair requires two free API keys:
 - [Dark Sky](https://darksky.net/dev): for weather reports.
 - [AirNow](https://docs.airnowapi.org/): for air quality reports from the Environmental Protection Agency.
 
-2. Download and install go.
+2. Download and install the Go programming language.
 
 3. Clone this repository.
 
-4. Change to this repository’s directory, and run go install. Make sure your terminal has the go bin directory in its $PATH.
+4. Change to this repository’s directory, and run `go install`. Make sure your terminal has the Go bin directory in its $PATH.
 
 5. Run `vaporwair` and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
 
 # Roadmap
-- Flag to re-enter API keys.
-- Option to specify standard international units.
+- Improve entry of API keys with confirmation. Possibly a flag to re-enter API keys.
+- Add a flag to specify and configure standard international units.
 - Once design finalizes, tests, benchmarking, and documentation upkeep.
+
+# License
+M.I.T.
+
 [Powered by Dark Sky](https://darksky.net/poweredby/) and [AirNow](https://airnow.gov/).
 
