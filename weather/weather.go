@@ -1,17 +1,17 @@
 package weather
 
 import (
+	"compress/gzip"
+	"encoding/json"
+	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/dialer"
 	"github.com/jeff-bruemmer/vaporwair/geolocation"
-	"encoding/json"
-	"compress/gzip"
 	"log"
-	"fmt"
 )
 
 type Flags struct {
 	DarkSkyUnavailable string   `json:"darksky-unavailable"`
-	DarkSkyStation     string `json:"datapoint-stations"`
+	DarkSkyStation     string   `json:"datapoint-stations"`
 	ISDStations        []string `json:"isds-stations"`
 	LAMPStations       []string `json:"lamp-stations"`
 	METARStations      []string `json:"metars-stations"`
@@ -47,6 +47,8 @@ type DataPoint struct {
 	Visibility             float64 `json:"visibility"`
 	Ozone                  float64 `json:"ozone"`
 	MoonPhase              float64 `json:"moonPhase"`
+	UVIndex                float64 `json:"uvIndex"`
+	UVIndexTime            float64 `json:"uvIndexTime"`
 }
 
 type DataBlock struct {
@@ -124,4 +126,3 @@ func GetForecast(addr string) Forecast {
 	json.NewDecoder(gz).Decode(&wf)
 	return wf
 }
-

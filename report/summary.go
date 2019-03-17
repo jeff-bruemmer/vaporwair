@@ -15,6 +15,7 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	Humidity(w)
 	Windspeed(w)
 	AirQualityIndex(a)
+	UVIndex(w)
 	Precipitation(w)
 	Sunrise(w)
 	Sunset(w)

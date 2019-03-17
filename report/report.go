@@ -40,6 +40,7 @@ var f2 = "%s:\t%.0f %s\n"
 var f3 = "%s:\t%v %s\n"
 var f4 = "%s:\t%v %s %s\n"
 var f5 = "%s:\t%s\n"
+var f6 = "%s:\t%v\n"
 
 // Adds title frame
 func Title(t string) string {
@@ -112,7 +113,7 @@ func Humidity(f weather.Forecast) {
 
 // Prints the windspeed average for the day.
 func Windspeed(f weather.Forecast) {
-
+	fmt.Fprintf(TW, f2, "Windspeed", f.Currently.WindSpeed, "mph")
 }
 
 // Prints the average cloudcover as a percentage.
@@ -178,7 +179,6 @@ func AirQualityIndex(f []air.Forecast) {
 }
 
 // Format 5
-
 // Prints the summary for the day.
 func DailySummary(f weather.Forecast) {
 	fmt.Fprintf(TW, f5, "Currently", AddPeriod(f.Currently.Summary))
@@ -187,4 +187,10 @@ func DailySummary(f weather.Forecast) {
 // Prints the summary for the week.
 func WeeklySummary(f weather.Forecast) {
 	fmt.Fprintf(TW, f5, "This week", AddPeriod(f.Daily.Summary))
+}
+
+// Format 6
+// Prints the UV index
+func UVIndex(f weather.Forecast) {
+	fmt.Fprintf(TW, f6, "UV Index", f.Currently.UVIndex)
 }
