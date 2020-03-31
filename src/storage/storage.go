@@ -1,12 +1,13 @@
+// This package contains OS utilites for storing and retrieving payloads from API calls.
 package storage
 
 import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/jeff-bruemmer/vaporwair/air"
-	"github.com/jeff-bruemmer/vaporwair/geolocation"
-	"github.com/jeff-bruemmer/vaporwair/weather"
+	"github.com/jeff-bruemmer/vaporwair/src/air"
+	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
+	"github.com/jeff-bruemmer/vaporwair/src/weather"
 	"io/ioutil"
 	"log"
 	"os"

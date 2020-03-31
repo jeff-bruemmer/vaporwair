@@ -1,11 +1,13 @@
+// This package contains the data structures and utilities for retrieving weather forecasts
+// from the the Dark Sky API.
 package weather
 
 import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"github.com/jeff-bruemmer/vaporwair/dialer"
-	"github.com/jeff-bruemmer/vaporwair/geolocation"
+	"github.com/jeff-bruemmer/vaporwair/src/dialer"
+	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 	"log"
 )
 

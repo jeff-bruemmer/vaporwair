@@ -1,8 +1,8 @@
 package report
 
 import (
-	"github.com/jeff-bruemmer/vaporwair/air"
-	"github.com/jeff-bruemmer/vaporwair/weather"
+	"github.com/jeff-bruemmer/vaporwair/src/air"
+	"github.com/jeff-bruemmer/vaporwair/src/weather"
 )
 
 // The default report.

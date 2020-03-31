@@ -1,3 +1,4 @@
+// This package handles calls for all API requests.
 package dialer
 
 import (
