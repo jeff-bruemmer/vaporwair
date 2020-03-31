@@ -1,11 +1,13 @@
+// This package contains the data structures and facilities for retrieving forecasts
+// from the AirNow API
 package air
 
 import (
-	"github.com/jeff-bruemmer/vaporwair/dialer"
-	"github.com/jeff-bruemmer/vaporwair/geolocation"
-	"log"
 	"encoding/json"
-)	
+	"github.com/jeff-bruemmer/vaporwair/src/dialer"
+	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
+	"log"
+)
 
 type Category struct {
 	Number int    `json:"Number"`
@@ -49,5 +51,3 @@ func GetForecast(addr string) []Forecast {
 	json.NewDecoder(resp.Body).Decode(&af)
 	return af
 }
-
-

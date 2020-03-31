@@ -1,12 +1,14 @@
+// This package handles data from IPAPI requests, which uses IP addresses to
+// obtain geolocation coordinates.
 package geolocation
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/jeff-bruemmer/vaporwair/src/dialer"
+	"os"
 	"strconv"
 	"strings"
-	"github.com/jeff-bruemmer/vaporwair/dialer"
-	"encoding/json"
-	"os"
-	"fmt"
 )
 
 type Coordinates struct {
@@ -32,7 +34,6 @@ type GeoData struct {
 	As          string  `json:"as"`
 	Query       string  `json:"query"`
 }
-
 
 const IPAPIAddress = "http://ip-api.com/json"
 
@@ -80,6 +81,3 @@ func GetGeoData(addr string) GeoData {
 	}
 	return gd
 }
-
-
-
