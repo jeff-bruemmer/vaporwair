@@ -12,7 +12,7 @@ Handles data from IPAPI requests, which uses IP addresses to obtain geolocation 
 Formats data from API calls into specific reports for display in terminal.
 
 ## sample
-Sampe data for development.
+Sample data for development.
 
 ## storage
 Contains OS utilities for storing and retrieving payloads from API calls.
