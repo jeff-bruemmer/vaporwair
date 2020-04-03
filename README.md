@@ -82,7 +82,7 @@ Wed       50 °F     66 °F     4 %       rain      35 %      7 mph
 
 ### Air Quality Report
 ```
-vaporwair -a
+$vaporwair -a
 2019-03-07 
 ==========
 Type      AQI       Category  Description
