@@ -103,26 +103,23 @@ CO        3         1         Good
 ```
 
 ## Setup
-1. Get API keys 
+1. Obtain two free API keys:
 
-Vaporwair requires two free API keys:
-
-- [Dark Sky](https://darksky.net/dev): for weather reports. (NOTE: to be deprecated in 2021).
+- [Dark Sky](https://darksky.net/dev): for weather reports. (NOTE: to be deprecated in 2021. Dark Sky is no longer issuing new API keys. Existing keys will work until the service shuts down in 2021).
 - [AirNow](https://docs.airnowapi.org/): for air quality reports from the Environmental Protection Agency.
 
 2. Download and install the [Go programming language](https://golang.org/).
-
 3. Clone this repository.
 
-4. Change to this repository’s directory, and run `go install`. Make sure your terminal has the [Go bin directory in its $PATH](https://golang.org/doc/gopath_code.html).
+4. Navigate to this repository’s directory, and run `go install`. Make sure your terminal has the [Go bin directory in its $PATH](https://golang.org/doc/gopath_code.html).
 
-5. Run `vaporwair` and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
+5. Run the `vaporwair` binary, and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
 
 ## Roadmap
+- Move from Dark Sky API to National Weather Service API.
 - Improve entry of API keys with confirmation. Possibly a flag to re-enter API keys.
 - Add a flag to specify and configure standard international units.
-- Once design finalizes, tests, benchmarking, and documentation upkeep.
-- Move from Dark Sky API to National Weather Service API.
+- Once design finalizes, include tests, benchmarks, and additional documentation.
 
 ## License
 M.I.T.
