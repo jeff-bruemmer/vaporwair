@@ -104,6 +104,7 @@ CO        3         1         Good
 
 ## Setup
 1. Get API keys 
+
 Vaporwair requires two free API keys:
 
 - [Dark Sky](https://darksky.net/dev): for weather reports. (NOTE: to be deprecated in 2021).
