@@ -1,5 +1,7 @@
 # Vaporwair
-Fast weather and air quality reports in your terminal.  
+Fast weather and air quality reports in your terminal. 
+
+> Dark Sky API deprecation coming 2021: Apple acquired Dark Sky, and will be shutting down its API. Dark Sky will no longer generate API tokens for new customers. Vaporwair will be moving to support the [National Weather Service API](https://www.weather.gov/documentation/services-web-api), so stay tuned.
 
 ![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.png "Anemometer")
 
@@ -17,8 +19,8 @@ Weather obtains user’s coordinates via their IP address, calls the Dark Sky an
 ### On Vaporwair Speed
 1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
 2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates. 
-3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the coordinates to those used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
-4. Vaporwair asynchronously calls the APIs with the updated coordinates and executes the report.
+3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
+4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, and executes user-flagged report, or prints the default report if none selected..
 
 ## Sample Reports
 
@@ -104,14 +106,14 @@ CO        3         1         Good
 1. Get API keys 
 Vaporwair requires two free API keys:
 
-- [Dark Sky](https://darksky.net/dev): for weather reports.
+- [Dark Sky](https://darksky.net/dev): for weather reports. (NOTE: to be deprecated in 2021).
 - [AirNow](https://docs.airnowapi.org/): for air quality reports from the Environmental Protection Agency.
 
-2. Download and install the Go programming language.
+2. Download and install the [Go programming language](https://golang.org/).
 
 3. Clone this repository.
 
-4. Change to this repository’s directory, and run `go install`. Make sure your terminal has the Go bin directory in its $PATH.
+4. Change to this repository’s directory, and run `go install`. Make sure your terminal has the [Go bin directory in its $PATH](https://golang.org/doc/gopath_code.html).
 
 5. Run `vaporwair` and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
 
@@ -119,6 +121,7 @@ Vaporwair requires two free API keys:
 - Improve entry of API keys with confirmation. Possibly a flag to re-enter API keys.
 - Add a flag to specify and configure standard international units.
 - Once design finalizes, tests, benchmarking, and documentation upkeep.
+- Move from Dark Sky API to National Weather Service API.
 
 ## License
 M.I.T.
