@@ -103,23 +103,29 @@ CO        3         1         Good
 - [AirNow](https://docs.airnowapi.org/): for air quality reports from the Environmental Protection Agency.
 
 2. Download and install the [Go programming language](https://golang.org/).
+
 3. Clone this repository.
 
 4. Navigate to this repository’s directory, and run `go install`. Make sure your terminal has the [Go bin directory in its $PATH](https://golang.org/doc/gopath_code.html).
 
-5. Run the `vaporwair` binary, and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
+5. Run the `vaporwair` binary, and follow the prompts to input the Dark Sky and AirNow API keys. Vaporwair will create a configuration directory in your home directory, then execute the Summary report
+
+You can specify other reports using the flags listed above in the Reports section. To view a list of available flags, type `vaporwair -help`.
 
 ## How Vaporwair Works
 Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
 
 ### On Vaporwair Speed
 1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
-2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates. 
-3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
-4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, and executes user-flagged report, or prints the default report if none selected..
+
+2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates.
+
+3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not: (Step 4).
+
+4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, and executes the Summary (or user-flagged) report.
 
 ## Design Constraints
-- No external libraries.
+- Only standard Go packages (i.e. no external libraries).
 - Reports must fit in an unmaximized terminal to avoid scrolling.
 - Only one report can be run at a time.
 
