@@ -5,24 +5,18 @@ Fast weather and air quality reports in your terminal.
 
 ![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.png "Anemometer")
 
+## About Vaporwair
+Vaporwair is a command line application that combines weather and air quality forecasts to produce four reports:
+
+- Summary
+- Hourly weather
+- Weekly forecast
+- Air quality report
+
 ## Rationale
 Most weather reports do not include air quality, and both air quality and weather services require visiting multiple web pages to get detailed information, which is slow. Vaporwair retrieves both forecasts in the terminal as quickly as possible. It’s written in Go, both for Go’s commandline and OS facilities, as well as its concurrency model.
 
-## Design Constraints
-- No external libraries.
-- Reports must fit in an unmaximized terminal to avoid scrolling.
-- Only one report can be run at a time.
-
-## How Vaporwair Works
-Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
-
-### On Vaporwair Speed
-1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
-2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates. 
-3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
-4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, and executes user-flagged report, or prints the default report if none selected..
-
-## Sample Reports
+## Reports
 
 ### Summary
 The default report.
@@ -114,6 +108,20 @@ CO        3         1         Good
 4. Navigate to this repository’s directory, and run `go install`. Make sure your terminal has the [Go bin directory in its $PATH](https://golang.org/doc/gopath_code.html).
 
 5. Run the `vaporwair` binary, and follow prompts to input API Keys. A configuration directory will automatically be created in your home directory, and the standard report will be run. Specify other reports using the flags listed above. To view a list of available flags, type `vaporwair -help`.
+
+## How Vaporwair Works
+Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
+
+### On Vaporwair Speed
+1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
+2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates. 
+3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not... (Step 4).
+4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, and executes user-flagged report, or prints the default report if none selected..
+
+## Design Constraints
+- No external libraries.
+- Reports must fit in an unmaximized terminal to avoid scrolling.
+- Only one report can be run at a time.
 
 ## Roadmap
 - Move from Dark Sky API to National Weather Service API.
