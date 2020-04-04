@@ -131,7 +131,7 @@ Weather obtains user’s coordinates via their IP address, calls the Dark Sky an
 
 ## Roadmap
 - Move from Dark Sky API to National Weather Service API.
-- Improve entry of API keys with confirmation. Possibly a flag to re-enter API keys.
+- Improve entry of API keys with confirmation, fault-tolerance. Possibly a flag to re-enter API keys.
 - Add a flag to specify and configure standard international units.
 - Once design finalizes, include tests, benchmarks, and additional documentation.
 
