@@ -17,7 +17,7 @@ Most weather reports do not include air quality, and both air quality and weathe
 ## Reports
 
 ### Summary
-The default report.
+The default report, which includes a brief description of the weather, min and max temps, humidity, air quality index, and more.
 ```
 $ vaporwair
 This week:            Light rain today, with high temperatures bottoming out at 59°F on Sunday.
@@ -34,8 +34,8 @@ Sunrise:              06:15 HH:MM
 Sunset:               17:55 HH:MM
 ```
 
-### Hourly Weather
-
+### Hourly weather
+The hourly weather report prints a short description of the forecaste, as well as the expected temperature, precipitation, precipitation intensity, and windspeed for the next 12 hours.
 ```
 $ vaporwair -h
 Partly cloudy until tomorrow afternoon.
@@ -56,7 +56,8 @@ Hour      Temp      Feels Like  Precip    Intensity  Wind
 03:00     50 °F     48 °F       6 %       0.15 mmph  6 mph
 ```
 
-### Weekly Weather
+### Weekly weather
+The weekly weather report prints a short description of the week's forecast, as well as temperature, precipitation, humidity, and windspeed for the coming 7 days.
 ```
 $ vaporwair -w
 Light rain today, with high temperatures bottoming out at 60°F on Sunday.
@@ -73,6 +74,7 @@ Wed       50 °F     66 °F     4 %       rain      35 %      7 mph
 ```
 
 ### Air Quality Report
+The air quality report prints the air quality index for five pollutants for the next two days.
 ```
 $ vaporwair -a
 2019-03-07 
