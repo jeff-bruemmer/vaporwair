@@ -3,8 +3,6 @@ Fast weather and air quality reports in your terminal.
 
 > **Dark Sky API deprecation coming 2021:** Apple acquired Dark Sky, and will be shutting down its API. Dark Sky will no longer generate API tokens for new customers. Vaporwair will be moving to support the [National Weather Service API](https://www.weather.gov/documentation/services-web-api), so stay tuned.
 
-![alt text](https://github.com/jeff-bruemmer/vaporwair/raw/master/anemometer.png "Anemometer")
-
 ## About Vaporwair
 Vaporwair is a command line application that combines weather and air quality forecasts to produce four reports:
 
