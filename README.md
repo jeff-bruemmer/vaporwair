@@ -122,7 +122,7 @@ Weather obtains user’s coordinates via their IP address, calls the Dark Sky an
 
 3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not: (Step 4).
 
-4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, and executes the Summary (or user-flagged) report.
+4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, executes the Summary (or user-flagged) report, and stores the forecast data for subsequent reports.
 
 ## Design Constraints
 - Only standard Go packages (i.e. no external libraries).
