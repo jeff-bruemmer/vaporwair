@@ -17,7 +17,7 @@ Most weather reports do not include air quality, and both air quality and weathe
 ## Reports
 
 ### Summary
-The default report, which includes a brief description of the weather, min and max temps, humidity, air quality index, and more.
+The default report includes a brief description of the weather, min and max temps, humidity, air quality index, and more.
 ```
 $ vaporwair
 This week:            Light rain today, with high temperatures bottoming out at 59°F on Sunday.
@@ -26,7 +26,7 @@ Current Temperature:  61 °F
 Min Temperature:      51 °F at 23:00 HH:MM
 Max Temperature:      61 °F at 15:00 HH:MM
 Humidity:             74 %
-Windspeed:            3 mph
+Wind speed:            3 mph
 Air Quality Index:    33 PM2.5 Good
 Precipitation:        69 %
 Precip Type:          rain 
@@ -35,7 +35,7 @@ Sunset:               17:55 HH:MM
 ```
 
 ### Hourly weather
-The hourly weather report prints a short description of the forecaste, as well as the expected temperature, precipitation, precipitation intensity, and windspeed for the next 12 hours.
+The hourly weather report prints a short description of the forecast, as well as the expected temperature, precipitation, precipitation intensity, and wind speed for the next 12 hours.
 ```
 $ vaporwair -h
 Partly cloudy until tomorrow afternoon.
@@ -57,7 +57,7 @@ Hour      Temp      Feels Like  Precip    Intensity  Wind
 ```
 
 ### Weekly weather
-The weekly weather report prints a short description of the week's forecast, as well as temperature, precipitation, humidity, and windspeed for the coming 7 days.
+The weekly weather report prints a short description of the week's forecast, as well as temperature, precipitation, humidity, and wind speed for the coming 7 days.
 ```
 $ vaporwair -w
 Light rain today, with high temperatures bottoming out at 60°F on Sunday.
@@ -99,7 +99,7 @@ CO        3         1         Good
 ## Setup
 1. Obtain two free API keys:
 
-- [Dark Sky](https://darksky.net/dev): for weather reports. (NOTE: to be deprecated in 2021. Dark Sky is no longer issuing new API keys. Existing keys will work until the service shuts down in 2021).
+- [Dark Sky](https://darksky.net/dev): for weather reports. (NOTE: to be deprecated in 2021. Dark Sky is no longer issuing new API keys. Existing keys will work until the service shuts down in 2021.)
 - [AirNow](https://docs.airnowapi.org/): for air quality reports from the Environmental Protection Agency.
 
 2. Download and install the [Go programming language](https://golang.org/).
@@ -112,11 +112,11 @@ CO        3         1         Good
 
 You can specify other reports using the flags listed above in the Reports section. To view a list of available flags, type `vaporwair -help`.
 
-## How Vaporwair Works
-Weather obtains user’s coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
+## How Vaporwair works
+Vaporwair obtains users coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
 
-### On Vaporwair Speed
-1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last minute.
+### On Vaporwair speed
+1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last five minutes.
 
 2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates.
 
@@ -124,7 +124,7 @@ Weather obtains user’s coordinates via their IP address, calls the Dark Sky an
 
 4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, executes the Summary (or user-flagged) report, and stores the forecast data for subsequent reports.
 
-## Design Constraints
+## Design constraints
 - Only standard Go packages (i.e. no external libraries).
 - Reports must fit in an unmaximized terminal to avoid scrolling.
 - Only one report can be run at a time.
