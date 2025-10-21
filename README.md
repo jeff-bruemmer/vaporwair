@@ -1,7 +1,7 @@
 # Vaporwair
-Fast weather and air quality reports in your terminal. 
+Fast weather and air quality reports in your terminal.
 
-> **Dark Sky API deprecation coming 2021:** Apple acquired Dark Sky, and will be shutting down its API. Dark Sky will no longer generate API tokens for new customers. Vaporwair will be moving to support the [National Weather Service API](https://www.weather.gov/documentation/services-web-api), so stay tuned.
+> **NOAA National Weather Service API:** Vaporwair now uses the free [National Weather Service API](https://www.weather.gov/documentation/services-web-api) for weather forecasts. No API key required for weather data!
 
 ## About Vaporwair
 Vaporwair is a command line application that combines weather and air quality forecasts to produce four reports:
@@ -97,28 +97,26 @@ CO        3         1         Good
 ```
 
 ## Setup
-1. Obtain two free API keys:
-
-- [Dark Sky](https://darksky.net/dev): for weather reports. (NOTE: to be deprecated in 2021. Dark Sky is no longer issuing new API keys. Existing keys will work until the service shuts down in 2021.)
-- [AirNow](https://docs.airnowapi.org/): for air quality reports from the Environmental Protection Agency.
+1. Obtain a free API key from [AirNow](https://docs.airnowapi.org/) for air quality reports from the Environmental Protection Agency.
+   - Weather data is provided by NOAA's National Weather Service API and does not require an API key.
 
 2. Download and install the [Go programming language](https://golang.org/).
 
 3. Clone this repository.
 
-4. Navigate to this repository’s directory, and run `go install`. Make sure your terminal has the [Go bin directory in its $PATH](https://golang.org/doc/gopath_code.html).
+4. Navigate to this repository's directory, and run `go install`. Make sure your terminal has the [Go bin directory in its $PATH](https://golang.org/doc/gopath_code.html).
 
-5. Run the `vaporwair` binary, and follow the prompts to input the Dark Sky and AirNow API keys. Vaporwair will create a configuration directory in your home directory, then execute the Summary report
+5. Run the `vaporwair` binary, and follow the prompts to input the AirNow API key. Vaporwair will create a configuration directory in your home directory, then execute the Summary report
 
 You can specify other reports using the flags listed above in the Reports section. To view a list of available flags, type `vaporwair -help`.
 
 ## How Vaporwair works
-Vaporwair obtains users coordinates via their IP address, calls the Dark Sky and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
+Vaporwair obtains users coordinates via their IP address, calls the NOAA National Weather Service and AirNow APIs to get location-based weather and air quality forecasts, then prints one of several reports, specified by a flag.
 
 ### On Vaporwair speed
 1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last five minutes.
 
-2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and Dark Sky APIs using the previous coordinates, and a call to the IP-API to get the current coordinates.
+2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and NOAA APIs using the previous coordinates, and a call to the IP-API to get the current coordinates.
 
 3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not: (Step 4).
 
@@ -130,7 +128,6 @@ Vaporwair obtains users coordinates via their IP address, calls the Dark Sky and
 - Only one report can be run at a time.
 
 ## Roadmap
-- Move from Dark Sky API to National Weather Service API.
 - Improve entry of API keys with confirmation, fault-tolerance. Possibly a flag to re-enter API keys.
 - Add a flag to specify and configure standard international units.
 - Once design finalizes, include tests, benchmarks, and additional documentation.
@@ -138,5 +135,5 @@ Vaporwair obtains users coordinates via their IP address, calls the Dark Sky and
 ## License
 M.I.T.
 
-[Powered by Dark Sky](https://darksky.net/poweredby/) and [AirNow](https://airnow.gov/).
+Powered by [NOAA National Weather Service API](https://www.weather.gov/documentation/services-web-api) and [AirNow](https://airnow.gov/).
 

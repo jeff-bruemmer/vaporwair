@@ -23,8 +23,8 @@ const ConfigFileName = VaporwairDir + "config.json"
 const SavedCallFileName = VaporwairDir + "last-call.json"
 
 // The Config type is used to store API keys.
+// Note: NOAA API does not require an API key.
 type Config struct {
-	DarkSkyAPIKey string `json:"darkskyapikey"`
 	AirNowAPIKey  string `json:"airnowapikey"`
 }
 
@@ -49,11 +49,10 @@ func Capture(prompt string) string {
 	return strings.TrimSpace(text)
 }
 
-func CreateConfig(homeDir, dsak, anak string) error {
+func CreateConfig(homeDir, anak string) error {
 	path := homeDir + ConfigFileName
 	os.Create(path)
 	config := Config{}
-	config.DarkSkyAPIKey = dsak
 	config.AirNowAPIKey = anak
 	c, err := json.Marshal(config)
 	if err != nil {

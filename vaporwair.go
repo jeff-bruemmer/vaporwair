@@ -97,13 +97,16 @@ func PrintSpaceTime(t, t1 time.Time, c geolocation.Coordinates) {
 }
 
 func RunReportsForFirstTime(c geolocation.Coordinates, t time.Time) (weather.Forecast, []air.Forecast) {
-	dsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, c, weather.DarkSkyUnits)
 	// build AirNowURL
 	anURL := air.BuildAirNowURL(air.AirNowAddress, c, t.Format("2006-01-02"), config.AirNowAPIKey)
 	weatherChan := make(chan weather.Forecast)
 	airChan := make(chan []air.Forecast)
 	go func() {
-		weatherChan <- weather.GetForecast(dsURL)
+		forecast, err := weather.GetNOAAWeatherForecast(c)
+		if err != nil {
+			log.Fatal("Error getting NOAA weather forecast: ", err)
+		}
+		weatherChan <- forecast
 	}()
 	go func() {
 		airChan <- air.GetForecast(anURL)
@@ -132,14 +135,14 @@ func SaveForecasts(homeDir string, coordinates geolocation.Coordinates, weather 
 	storage.SaveAirForecast(homeDir+storage.SavedAirFileName, airForecast)
 }
 
-// CaptureAPIKeys prompts users for Dark Sky and Air Now API keys
-// and saves thems in a config file.
+// CaptureAPIKeys prompts users for Air Now API key
+// and saves it in a config file.
+// Note: NOAA API does not require an API key.
 func CaptureAPIKeys(homeDir string) {
-	DSAPIKey := storage.Capture("Enter Dark Sky API key: ")
 	ANAPIKey := storage.Capture("Enter Air Now API key: ")
-	err := storage.CreateConfig(homeDir, DSAPIKey, ANAPIKey)
+	err := storage.CreateConfig(homeDir, ANAPIKey)
 	if err != nil {
-		log.Fatal("There was a problem saving your APIkeys. Try again.")
+		log.Fatal("There was a problem saving your API key. Try again.")
 	}
 }
 
@@ -259,7 +262,6 @@ func main() {
 	// While waiting for the coordinates to return form the IP-API,
 	// assume user has not changed coordinates since last weather check
 	// and make optimistic call to APIs using saved coordinates.
-	odsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, pc.Coordinates, weather.DarkSkyUnits)
 	oanURL := air.BuildAirNowURL(air.AirNowAddress, pc.Coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
 
 	// optimistic channels
@@ -267,7 +269,11 @@ func main() {
 	oa := make(chan []air.Forecast)
 
 	go func() {
-		ow <- weather.GetForecast(odsURL)
+		forecast, err := weather.GetNOAAWeatherForecast(pc.Coordinates)
+		if err != nil {
+			log.Fatal("Error getting NOAA weather forecast: ", err)
+		}
+		ow <- forecast
 	}()
 	go func() {
 		oa <- air.GetForecast(oanURL)
@@ -289,12 +295,15 @@ func main() {
 		// user is in a new location, and calls with the updated coordinates need to be made.
 
 		// Build URLs.
-		dsURL := weather.BuildDarkSkyURL(weather.DarkSkyAddress, config.DarkSkyAPIKey, coordinates, weather.DarkSkyUnits)
 		anURL := air.BuildAirNowURL(air.AirNowAddress, coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
 
-		// Asynchronously make calls to Dark Sky and Airnow with confirmed coordinates
+		// Asynchronously make calls to NOAA and Airnow with confirmed coordinates
 		go func() {
-			weatherChan <- weather.GetForecast(dsURL)
+			forecast, err := weather.GetNOAAWeatherForecast(coordinates)
+			if err != nil {
+				log.Fatal("Error getting NOAA weather forecast: ", err)
+			}
+			weatherChan <- forecast
 		}()
 		go func() {
 			airChan <- air.GetForecast(anURL)
