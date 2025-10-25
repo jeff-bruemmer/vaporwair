@@ -293,18 +293,18 @@ func main() {
 	t := time.Now()
 	flag.Parse()
 
+	// Setup configuration BEFORE starting spinner (may prompt for user input)
+	appConfig, err := setupConfiguration()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Create channels for spinner coordination (no global state)
 	spinnerDone := make(chan bool)
 	spinnerResult := make(chan time.Time)
 
 	// Start spinner in background
 	go Spinner(t, spinnerDone, spinnerResult)
-
-	// Setup configuration
-	appConfig, err := setupConfiguration()
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	// Try to use cached forecasts if still valid
 	if loadCachedForecasts(appConfig, t, spinnerDone, spinnerResult) {
@@ -315,6 +315,8 @@ func main() {
 	coordinates, usedZip := GetCoordinates(appConfig)
 	wf, af, err := fetchForecasts(coordinates, appConfig.Config, t.Format("2006-01-02"))
 	if err != nil {
+		spinnerDone <- true
+		<-spinnerResult
 		log.Fatal(err)
 	}
 
