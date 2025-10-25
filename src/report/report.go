@@ -5,6 +5,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 	"os"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -21,47 +22,44 @@ const (
 	flags    = 0
 )
 
-// Formats
-var tu = "°F"
-var hm = "HH:MM"
-var wu = "mph"
-var pu = "atm"
-var du = "miles"
-var pc = "%"
+// Unit symbols
+var temperatureUnit = "°F"
+var timeFormat = "HH:MM"
+var windSpeedUnit = "mph"
+var pressureUnit = "atm"
+var distanceUnit = "miles"
+var percentUnit = "%"
 
 // Separator separates report summaries from tables.
 var Separator = "+++"
 
 var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags)
 
-// Formats
-var f1 = "%s:\t%.0f %s at %v %s\n"
-var f2 = "%s:\t%.0f %s\n"
-var f3 = "%s:\t%v %s\n"
-var f4 = "%s:\t%v %s %s\n"
-var f5 = "%s:\t%s\n"
-var f6 = "%s:\t%v\n"
+// Format strings for tabwriter output
+var formatValueWithTime = "%s:\t%.0f %s at %v %s\n"      // e.g., "Min Temperature: 33 °F at 19:00 HH:MM"
+var formatValueWithUnit = "%s:\t%.0f %s\n"               // e.g., "Humidity: 83 %"
+var formatLabelValue = "%s:\t%v %s\n"                    // e.g., "Sunrise: 06:15 HH:MM"
+var formatMultipleValues = "%s:\t%v %s %s\n"             // e.g., "Air Quality Index: 55 O3 Moderate"
+var formatString = "%s:\t%s\n"                           // e.g., "Currently: Mostly Cloudy"
+var formatNumber = "%s:\t%v\n"                           // e.g., "UV Index: 0"
 
 // Adds title frame
 func Title(t string) string {
 	return "-- " + strings.ToUpper(t) + " --"
 }
 
-// Adds space padding
+// Pad adds leading spaces to align numbers to 4 characters width.
 func Pad(v int) string {
-	fmt.Println("v", v)
-	s := string(v)
-	fmt.Println(s)
+	s := strconv.Itoa(v)
 	var b []string
 	for i := len(s); i < 4; i++ {
 		b = append(b, " ")
 	}
 	b = append(b, s)
-	fmt.Println(b)
 	return strings.Join(b, "")
 }
 
-// Adds period to end of string, because the Dark sky summaries are punctuationally inconsistent.
+// Adds period to end of string if one is not present.
 func AddPeriod(s string) string {
 	if strings.LastIndex(s, ".") != len(s)-1 {
 		return s + "."
@@ -89,82 +87,93 @@ func LimitData(d []weather.DataPoint, l int) []weather.DataPoint {
 	}
 }
 
-// Format 1
 func MinTemp(f weather.Forecast) {
-	fmt.Fprintf(TW, f1, "Min Temperature", Round(f.Daily.Data[0].TemperatureMin), tu, FormatTime(f.Daily.Data[0].TemperatureMinTime), hm)
+	fmt.Fprintf(TW, formatValueWithUnit, "Min Temperature", Round(f.Daily.Data[0].TemperatureMin), temperatureUnit)
 }
 
 // Prints maximum daily temperature and time.
 func MaxTemp(f weather.Forecast) {
-	fmt.Fprintf(TW, f1, "Max Temperature", f.Daily.Data[0].TemperatureMax, tu, FormatTime(f.Daily.Data[0].TemperatureMaxTime), hm)
-
+	fmt.Fprintf(TW, formatValueWithUnit, "Max Temperature", f.Daily.Data[0].TemperatureMax, temperatureUnit)
+	// Show temperature trend if available
+	if f.Daily.Data[0].TemperatureTrend != "" {
+		fmt.Fprintf(TW, formatLabelValue, "Temp Trend", f.Daily.Data[0].TemperatureTrend, "")
+	}
 }
 
-// Format 2
 // Prints minimum daily temperature and time.
 func CurrentTemp(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Current Temperature", Round(f.Hourly.Data[0].Temperature), tu)
+	fmt.Fprintf(TW, formatValueWithUnit, "Current Temperature", Round(f.Hourly.Data[0].Temperature), temperatureUnit)
 }
 
 // Prints humidity converted to percent.
 func Humidity(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Humidity", ToPercent(f.Daily.Data[0].Humidity), pc)
+	fmt.Fprintf(TW, formatValueWithUnit, "Humidity", ToPercent(f.Currently.Humidity), percentUnit)
 }
 
 // Prints the windspeed average for the day.
 func Windspeed(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Windspeed", f.Currently.WindSpeed, "mph")
+	fmt.Fprintf(TW, formatValueWithUnit, "Windspeed", f.Currently.WindSpeed, windSpeedUnit)
+	// Show wind gust if available
+	if f.Currently.WindGust > 0 {
+		fmt.Fprintf(TW, formatValueWithUnit, "Wind Gust", f.Currently.WindGust, windSpeedUnit)
+	}
 }
 
 // Prints the average cloudcover as a percentage.
 func Cloudcover(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Cloudcover", ToPercent(f.Daily.Data[0].CloudCover), pc)
+	fmt.Fprintf(TW, formatValueWithUnit, "Cloudcover", ToPercent(f.Daily.Data[0].CloudCover), percentUnit)
 }
 
-// Prints precipitation and type of precipitation.
+// Prints precipitation probability.
 func Precipitation(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Precipitation", Round(ToPercent(f.Daily.Data[0].PrecipProbability)), pc)
-	if ToPercent(f.Daily.Data[0].PrecipProbability) > 0 {
-		fmt.Fprintf(TW, f3, "Precip Type", f.Daily.Data[0].PrecipType, "")
-	}
+	fmt.Fprintf(TW, formatValueWithUnit, "Precipitation", Round(ToPercent(f.Daily.Data[0].PrecipProbability)), percentUnit)
 }
 
 // Prints the pressure in atmospheres.
 func Pressure(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Pressure", f.Daily.Data[0].Pressure, pu)
+	fmt.Fprintf(TW, formatValueWithUnit, "Pressure", f.Daily.Data[0].Pressure, pressureUnit)
 }
 
 func Dewpoint(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Dewpoint", f.Daily.Data[0].DewPoint, tu)
+	fmt.Fprintf(TW, formatValueWithUnit, "Dewpoint", f.Daily.Data[0].DewPoint, temperatureUnit)
 }
 
 func Visibility(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Visibility", f.Daily.Data[0].Visibility, du)
+	fmt.Fprintf(TW, formatValueWithUnit, "Visibility", f.Daily.Data[0].Visibility, distanceUnit)
 }
 
-// Format 3
 // Sunrise prints the time the sun rises.
 func Sunrise(f weather.Forecast) {
-	fmt.Fprintf(TW, f3, "Sunrise", FormatTime(f.Daily.Data[0].SunriseTime), hm)
+	fmt.Fprintf(TW, formatLabelValue, "Sunrise", FormatTime(f.Daily.Data[0].SunriseTime), timeFormat)
 }
 
 // Sunset prints the time the sun sets.
 func Sunset(f weather.Forecast) {
-	fmt.Fprintf(TW, f3, "Sunset", FormatTime(f.Daily.Data[0].SunsetTime), hm)
+	fmt.Fprintf(TW, formatLabelValue, "Sunset", FormatTime(f.Daily.Data[0].SunsetTime), timeFormat)
 }
 
-// Format 4
 // AirQualityIndex takes a forecast and lists the highest AQI index
 // and its particle type and category.
 func AirQualityIndex(f []air.Forecast) {
+	// Check if air forecast data is available
+	if len(f) == 0 {
+		fmt.Fprintf(TW, formatMultipleValues, "Air Quality Index", "N/A", "No data", "unavailable")
+		return
+	}
+
 	today := f[0].DateForecast
-	var aqi int
+	aqi := -1 // Initialize to -1 to detect if we found any valid AQI values
 	var particle string
 	var category string
 	for _, measurement := range f {
 		// We are only interested in the highest AQI for today.
 		if measurement.DateForecast != today {
 			break
+		}
+
+		// Skip measurements with invalid AQI values (AirNow returns -1 for unavailable forecasts)
+		if measurement.AQI < 0 {
+			continue
 		}
 
 		// If that measurement exceeds that of the other reigning particle,
@@ -175,22 +184,31 @@ func AirQualityIndex(f []air.Forecast) {
 			category = measurement.Category.Name
 		}
 	}
-	fmt.Fprintf(TW, f4, "Air Quality Index", aqi, particle, category)
+
+	// If no valid AQI found, display appropriate message
+	if aqi < 0 {
+		fmt.Fprintf(TW, formatMultipleValues, "Air Quality Index", "N/A", "Forecast", "not yet available")
+		return
+	}
+
+	fmt.Fprintf(TW, formatMultipleValues, "Air Quality Index", aqi, particle, category)
 }
 
-// Format 5
 // Prints the summary for the day.
 func DailySummary(f weather.Forecast) {
-	fmt.Fprintf(TW, f5, "Currently", AddPeriod(f.Currently.Summary))
+	fmt.Fprintf(TW, formatString, "Currently", AddPeriod(f.Currently.Summary))
+	// Show detailed forecast if available
+	if f.Currently.DetailedForecast != "" {
+		fmt.Fprintf(TW, formatString, "Details", AddPeriod(f.Currently.DetailedForecast))
+	}
 }
 
 // Prints the summary for the week.
 func WeeklySummary(f weather.Forecast) {
-	fmt.Fprintf(TW, f5, "This week", AddPeriod(f.Daily.Summary))
+	fmt.Fprintf(TW, formatString, "This week", AddPeriod(f.Daily.Summary))
 }
 
-// Format 6
 // Prints the UV index
 func UVIndex(f weather.Forecast) {
-	fmt.Fprintf(TW, f6, "UV Index", f.Currently.UVIndex)
+	fmt.Fprintf(TW, formatNumber, "UV Index", f.Currently.UVIndex)
 }

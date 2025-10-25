@@ -18,4 +18,4 @@ Sample data for development.
 Contains OS utilities for storing and retrieving payloads from API calls.
 
 ## weather
-Contains the data structures and utilities for retrieving weather forecasts from the Dark Sky API.
+Contains the data structures and utilities for retrieving weather forecasts from the NOAA National Weather Service API.
