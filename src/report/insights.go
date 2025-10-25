@@ -8,6 +8,9 @@ import (
 
 // InsightsReport provides comparative analysis and time-based insights.
 func InsightsReport(w weather.Forecast, a []air.Forecast) {
+	// Show weather alerts first if any exist
+	WeatherAlerts(w)
+
 	fmt.Fprintln(TW, Title("Comparative Analysis & Insights"))
 	fmt.Fprintln(TW, "")
 
@@ -55,6 +58,8 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 	// Additional metrics
 	Precipitation(w)
 	Windspeed(w)
+	Pressure(w)
+	Visibility(w)
 	AirQualityIndex(a)
 	UVIndex(w)
 

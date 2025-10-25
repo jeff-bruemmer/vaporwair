@@ -8,6 +8,9 @@ import (
 
 // The default report.
 func Summary(w weather.Forecast, a []air.Forecast) {
+	// Show weather alerts first if any exist
+	WeatherAlerts(w)
+
 	WeeklySummary(w)
 	DailySummary(w)
 	CurrentTemp(w)
@@ -15,6 +18,8 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	MaxTemp(w)
 	Humidity(w)
 	Windspeed(w)
+	Pressure(w)
+	Visibility(w)
 	AirQualityIndex(a)
 	UVIndex(w)
 	Precipitation(w)

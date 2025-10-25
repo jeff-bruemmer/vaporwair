@@ -86,18 +86,58 @@ type Forecast struct {
 const NOAABaseURL = "https://api.weather.gov"
 const NOAAUserAgent = "vaporwair/2.0 (https://github.com/jeff-bruemmer/vaporwair)"
 
+// NOAA Alerts API structures
+type NOAAAlertResponse struct {
+	Features []NOAAAlertFeature `json:"features"`
+}
+
+type NOAAAlertFeature struct {
+	Properties NOAAAlertProperties `json:"properties"`
+}
+
+type NOAAAlertProperties struct {
+	Event       string `json:"event"`
+	Headline    string `json:"headline"`
+	Description string `json:"description"`
+	Onset       string `json:"onset"`
+	Expires     string `json:"expires"`
+}
+
+// NOAA Observation Station structures
+type NOAAStationsResponse struct {
+	Features []NOAAStationFeature `json:"features"`
+}
+
+type NOAAStationFeature struct {
+	Properties NOAAStationProperties `json:"properties"`
+}
+
+type NOAAStationProperties struct {
+	StationIdentifier string `json:"stationIdentifier"`
+}
+
+type NOAAObservationResponse struct {
+	Properties NOAAObservationProperties `json:"properties"`
+}
+
+type NOAAObservationProperties struct {
+	BarometricPressure NOAAValue `json:"barometricPressure"`
+	Visibility         NOAAValue `json:"visibility"`
+}
+
 // NOAA API response structures
 type NOAAPointsResponse struct {
 	Properties NOAAPointsProperties `json:"properties"`
 }
 
 type NOAAPointsProperties struct {
-	GridID          string `json:"gridId"`
-	GridX           int    `json:"gridX"`
-	GridY           int    `json:"gridY"`
-	Forecast        string `json:"forecast"`
-	ForecastHourly  string `json:"forecastHourly"`
-	RelativeLocation NOAARelativeLocation `json:"relativeLocation"`
+	GridID               string               `json:"gridId"`
+	GridX                int                  `json:"gridX"`
+	GridY                int                  `json:"gridY"`
+	Forecast             string               `json:"forecast"`
+	ForecastHourly       string               `json:"forecastHourly"`
+	ObservationStations  string               `json:"observationStations"`
+	RelativeLocation     NOAARelativeLocation `json:"relativeLocation"`
 }
 
 type NOAARelativeLocation struct {
@@ -447,6 +487,102 @@ func stringContains(s, substr string) bool {
 	return false
 }
 
+// GetNOAAAlerts retrieves active weather alerts for coordinates.
+func GetNOAAAlerts(c geolocation.Coordinates) ([]Alert, error) {
+	url := fmt.Sprintf("%s/alerts/active?point=%s,%s", NOAABaseURL, c.Latitude, c.Longitude)
+
+	resp, err := dialer.NetReqWithUserAgent(url, 10, false, NOAAUserAgent)
+	if err != nil {
+		// Alerts are optional - don't fail if unavailable
+		return []Alert{}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		// Alerts endpoint error - return empty slice
+		return []Alert{}, nil
+	}
+
+	var alertResp NOAAAlertResponse
+	err = json.NewDecoder(resp.Body).Decode(&alertResp)
+	if err != nil {
+		return []Alert{}, nil
+	}
+
+	// Convert NOAA alerts to our Alert structure
+	alerts := make([]Alert, 0)
+	for _, feature := range alertResp.Features {
+		props := feature.Properties
+
+		var onset, expires float64
+		if t, err := time.Parse(time.RFC3339, props.Onset); err == nil {
+			onset = float64(t.Unix())
+		}
+		if t, err := time.Parse(time.RFC3339, props.Expires); err == nil {
+			expires = float64(t.Unix())
+		}
+
+		alert := Alert{
+			Title:       props.Event,
+			Description: props.Description,
+			Time:        onset,
+			Expires:     expires,
+			URI:         "", // NOAA doesn't provide direct URI in alerts
+		}
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// GetNOAAObservation retrieves current observation data for pressure and visibility.
+func GetNOAAObservation(stationsURL string) (NOAAObservationProperties, error) {
+	var obsProps NOAAObservationProperties
+
+	// First, get list of observation stations
+	resp, err := dialer.NetReqWithUserAgent(stationsURL, 10, false, NOAAUserAgent)
+	if err != nil {
+		return obsProps, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return obsProps, fmt.Errorf("observation stations endpoint returned status %d", resp.StatusCode)
+	}
+
+	var stations NOAAStationsResponse
+	err = json.NewDecoder(resp.Body).Decode(&stations)
+	if err != nil {
+		return obsProps, err
+	}
+
+	if len(stations.Features) == 0 {
+		return obsProps, fmt.Errorf("no observation stations found")
+	}
+
+	// Get observations from the first (nearest) station
+	stationID := stations.Features[0].Properties.StationIdentifier
+	obsURL := fmt.Sprintf("%s/stations/%s/observations/latest", NOAABaseURL, stationID)
+
+	resp, err = dialer.NetReqWithUserAgent(obsURL, 10, false, NOAAUserAgent)
+	if err != nil {
+		return obsProps, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return obsProps, fmt.Errorf("observation endpoint returned status %d", resp.StatusCode)
+	}
+
+	var observation NOAAObservationResponse
+	err = json.NewDecoder(resp.Body).Decode(&observation)
+	if err != nil {
+		return obsProps, err
+	}
+
+	return observation.Properties, nil
+}
+
 // GetNOAAWeatherForecast is the main function to get weather forecast from NOAA API.
 func GetNOAAWeatherForecast(c geolocation.Coordinates) (Forecast, error) {
 	// Step 1: Get grid point information
@@ -467,8 +603,39 @@ func GetNOAAWeatherForecast(c geolocation.Coordinates) (Forecast, error) {
 		return Forecast{}, err
 	}
 
-	// Step 4: Convert to our Forecast structure
+	// Step 4: Get weather alerts (optional - don't fail if unavailable)
+	alerts, _ := GetNOAAAlerts(c)
+
+	// Step 5: Get observation data for pressure and visibility (optional)
+	var observation NOAAObservationProperties
+	if points.Properties.ObservationStations != "" {
+		observation, _ = GetNOAAObservation(points.Properties.ObservationStations)
+	}
+
+	// Step 6: Convert to our Forecast structure
 	forecast := ConvertNOAAToForecast(points, dailyForecast, hourlyForecast, c)
+	forecast.Alerts = alerts
+
+	// Add observation data to current conditions
+	if observation.BarometricPressure.Value != nil {
+		// Convert from Pascals to millibars (1 Pa = 0.01 mbar)
+		forecast.Currently.Pressure = *observation.BarometricPressure.Value / 100.0
+		// Convert to atmospheres (1 atm = 1013.25 mbar)
+		forecast.Currently.Pressure = forecast.Currently.Pressure / 1013.25
+		// Also add to daily data
+		if len(forecast.Daily.Data) > 0 {
+			forecast.Daily.Data[0].Pressure = forecast.Currently.Pressure
+		}
+	}
+
+	if observation.Visibility.Value != nil {
+		// Convert from meters to miles (1 meter = 0.000621371 miles)
+		forecast.Currently.Visibility = *observation.Visibility.Value * 0.000621371
+		// Also add to daily data
+		if len(forecast.Daily.Data) > 0 {
+			forecast.Daily.Data[0].Visibility = forecast.Currently.Visibility
+		}
+	}
 
 	return forecast, nil
 }

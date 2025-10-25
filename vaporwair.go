@@ -20,6 +20,7 @@ var weatherWeek bool
 var airQuality bool
 var clothingReport bool
 var insightsReport bool
+var summaryReport bool
 var zipCode string
 var useCurrentLocation bool
 
@@ -91,6 +92,8 @@ func RunReports(f weather.Forecast, a []air.Forecast) {
 		report.ClothingReport(f, a)
 	case insightsReport:
 		report.InsightsReport(f, a)
+	case summaryReport:
+		report.Summary(f, a)
 	default:
 		report.InsightsReport(f, a)
 	}
@@ -190,6 +193,7 @@ func init() {
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
 	flag.BoolVar(&clothingReport, "c", false, "Prints clothing recommendations based on weather (what to wair).")
 	flag.BoolVar(&insightsReport, "i", false, "Prints comparative analysis and time-based insights.")
+	flag.BoolVar(&summaryReport, "s", false, "Prints summary report with current conditions.")
 	flag.StringVar(&zipCode, "zip", "", "Get weather for a specific US zip code (e.g., -zip=10001).")
 	flag.BoolVar(&useCurrentLocation, "current", false, "Use current IP-based location (temporary override).")
 }

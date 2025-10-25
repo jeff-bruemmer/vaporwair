@@ -110,9 +110,17 @@ func Humidity(f weather.Forecast) {
 	fmt.Fprintf(TW, formatValueWithUnit, "Humidity", ToPercent(f.Currently.Humidity), percentUnit)
 }
 
-// Prints the windspeed average for the day.
+// DegreesToCardinal converts wind bearing in degrees to cardinal direction.
+func DegreesToCardinal(degrees float64) string {
+	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
+	index := int((degrees + 11.25) / 22.5)
+	return directions[index%16]
+}
+
+// Prints the windspeed average for the day with direction.
 func Windspeed(f weather.Forecast) {
-	fmt.Fprintf(TW, formatValueWithUnit, "Windspeed", f.Currently.WindSpeed, windSpeedUnit)
+	windDir := DegreesToCardinal(f.Currently.WindBearing)
+	fmt.Fprintf(TW, "Windspeed:\t%.0f %s from %s\n", f.Currently.WindSpeed, windSpeedUnit, windDir)
 	// Show wind gust if available
 	if f.Currently.WindGust > 0 {
 		fmt.Fprintf(TW, formatValueWithUnit, "Wind Gust", f.Currently.WindGust, windSpeedUnit)
@@ -225,4 +233,34 @@ func WeeklySummary(f weather.Forecast) {
 // Prints the UV index
 func UVIndex(f weather.Forecast) {
 	fmt.Fprintf(TW, formatNumber, "UV Index", f.Currently.UVIndex)
+}
+
+// WeatherAlerts prints active weather alerts if any exist.
+func WeatherAlerts(f weather.Forecast) {
+	if len(f.Alerts) == 0 {
+		return
+	}
+
+	fmt.Println()
+	fmt.Println(Title("Weather Alerts"))
+	for i, alert := range f.Alerts {
+		if i > 0 {
+			fmt.Println()
+		}
+		fmt.Fprintf(TW, "Alert:\t%s\n", alert.Title)
+
+		// Show expiration time if available
+		if alert.Expires > 0 {
+			expiryTime := FormatTime(alert.Expires)
+			fmt.Fprintf(TW, "Expires:\t%s\n", expiryTime)
+		}
+
+		// Show description (truncate if too long)
+		description := alert.Description
+		if len(description) > 200 {
+			description = description[:197] + "..."
+		}
+		fmt.Fprintf(TW, "Details:\t%s\n", description)
+	}
+	TW.Flush()
 }
