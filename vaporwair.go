@@ -36,7 +36,9 @@ func isValid(t time.Time, timeout float64) bool {
 func Spinner(startTime time.Time, done chan bool, result chan time.Time) {
 	meterInit := "\r[=>                                               ]"
 	meter := meterInit
-	for i := 0; i <= len(meterInit)-1; i++ {
+	maxIterations := 600 // 60 seconds timeout (600 * 100ms)
+
+	for i := 0; i <= maxIterations; i++ {
 		select {
 		case <-done:
 			// Clear the line and exit
@@ -46,11 +48,17 @@ func Spinner(startTime time.Time, done chan bool, result chan time.Time) {
 		default:
 			// Set the interval to add another =.
 			time.Sleep(100 * time.Millisecond)
-			meter = strings.Replace(meter, "> ", "=>", 1)
+
+			// Update progress bar (loop it if necessary)
+			if i < len(meterInit)-1 {
+				meter = strings.Replace(meter, "> ", "=>", 1)
+			}
 			fmt.Print(meter)
-			// Loop spinner if it completes before the reports have returned
-			if i == len(meterInit)-1 {
-				log.Fatal("There was a problem getting your forecast. Please check your internet connection.")
+
+			// Timeout after max iterations
+			if i == maxIterations {
+				fmt.Printf("\r                                                      ")
+				log.Fatal("Request timed out after 60 seconds. The weather service may be unavailable.")
 			}
 		}
 	}
@@ -98,8 +106,7 @@ func GetCoordinates(appConfig storage.AppConfig) (geolocation.Coordinates, strin
 		// Force IP-based location (temporarily override default zip)
 		geoData, err = geolocation.GetGeoData(geolocation.IPAPIAddress)
 		if err != nil {
-			fmt.Println("Error:", err)
-			log.Fatal("Unable to determine your location. Please check your internet connection.")
+			log.Fatalf("Failed to determine location from IP address: %v\nPlease check your internet connection.", err)
 		}
 		// usedZip remains empty so we don't update the default
 	} else if zipCode != "" {
@@ -107,30 +114,27 @@ func GetCoordinates(appConfig storage.AppConfig) (geolocation.Coordinates, strin
 		usedZip = zipCode
 		geoData, err = geolocation.GetGeoDataFromZip(zipCode)
 		if err != nil {
-			fmt.Println("Error:", err)
-			log.Fatal("Unable to get location from zip code. Please verify the zip code is valid.")
+			log.Fatalf("Failed to get location for zip code %s: %v\nPlease verify the zip code is valid.", zipCode, err)
 		}
 	} else if appConfig.Config.DefaultZipCode != "" {
 		// Get coordinates from saved default zip code
 		usedZip = appConfig.Config.DefaultZipCode
 		geoData, err = geolocation.GetGeoDataFromZip(appConfig.Config.DefaultZipCode)
 		if err != nil {
-			fmt.Printf("Error using default zip code %s: %v\n", appConfig.Config.DefaultZipCode, err)
+			fmt.Printf("Warning: Could not use default zip code %s: %v\n", appConfig.Config.DefaultZipCode, err)
 			fmt.Println("Falling back to IP-based location...")
 			// Fall through to IP geolocation
 			usedZip = ""
 			geoData, err = geolocation.GetGeoData(geolocation.IPAPIAddress)
 			if err != nil {
-				fmt.Println("Error:", err)
-				log.Fatal("Unable to determine your location. Please check your internet connection.")
+				log.Fatalf("Failed to determine location: %v\nPlease check your internet connection or specify a valid zip code with -zip flag.", err)
 			}
 		}
 	} else {
 		// Get geolocation data from IP address
 		geoData, err = geolocation.GetGeoData(geolocation.IPAPIAddress)
 		if err != nil {
-			fmt.Println("Error:", err)
-			log.Fatal("Unable to determine your location. Please check your internet connection.")
+			log.Fatalf("Failed to determine location from IP address: %v\nPlease check your internet connection or specify a zip code with -zip flag.", err)
 		}
 	}
 
@@ -201,7 +205,7 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config, date 
 	go func() {
 		forecast, err := weather.GetNOAAWeatherForecast(coords)
 		if err != nil {
-			errChan <- fmt.Errorf("weather API error: %w", err)
+			errChan <- fmt.Errorf("failed to retrieve weather forecast from NOAA: %w", err)
 			return
 		}
 		weatherChan <- forecast
@@ -211,19 +215,22 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config, date 
 	go func() {
 		if config.AirNowAPIKey != "" {
 			anURL := air.BuildAirNowURL(air.AirNowAddress, coords, date, config.AirNowAPIKey)
-			airChan <- air.GetForecast(anURL)
+			forecast := air.GetForecast(anURL)
+			airChan <- forecast
 		} else {
 			airChan <- []air.Forecast{}
 		}
 	}()
 
-	// Wait for results
+	// Wait for results with timeout
 	select {
 	case err := <-errChan:
 		return weather.Forecast{}, nil, err
 	case wf := <-weatherChan:
 		af := <-airChan
 		return wf, af, nil
+	case <-time.After(30 * time.Second):
+		return weather.Forecast{}, nil, fmt.Errorf("timeout: weather service did not respond within 30 seconds")
 	}
 }
 

@@ -83,17 +83,22 @@ func GetGeoData(addr string) (GeoData, error) {
 	// Request coordinates from ip-api and specify timeout in seconds
 	resp, err := dialer.NetReq(addr, 5, false)
 	if err != nil {
-		return gd, fmt.Errorf("geolocation service error: %w", err)
+		return gd, fmt.Errorf("failed to connect to IP geolocation service (%s): %w", addr, err)
 	}
 	defer resp.Body.Close()
 
+	// Check HTTP status code
+	if resp.StatusCode != 200 {
+		return gd, fmt.Errorf("IP geolocation service returned error status %d", resp.StatusCode)
+	}
+
 	err = json.NewDecoder(resp.Body).Decode(&gd)
 	if err != nil {
-		return gd, fmt.Errorf("error decoding geolocation response: %w", err)
+		return gd, fmt.Errorf("failed to parse geolocation response: %w", err)
 	}
 
 	if gd.Status == "fail" {
-		return gd, fmt.Errorf("geolocation service could not resolve coordinates")
+		return gd, fmt.Errorf("geolocation service could not determine location from your IP address")
 	}
 	return gd, nil
 }
@@ -102,30 +107,35 @@ func GetGeoData(addr string) (GeoData, error) {
 func GetGeoDataFromZip(zipCode string) (GeoData, error) {
 	var gd GeoData
 
+	// Validate zip code format
+	if len(zipCode) != 5 {
+		return gd, fmt.Errorf("invalid zip code format '%s' (must be 5 digits)", zipCode)
+	}
+
 	// Call zippopotam.us API
 	url := ZipCodeAPIAddress + zipCode
 	resp, err := dialer.NetReq(url, 5, false)
 	if err != nil {
-		return gd, fmt.Errorf("zip code lookup error: %w", err)
+		return gd, fmt.Errorf("failed to connect to zip code lookup service: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Check HTTP status
 	if resp.StatusCode == 404 {
-		return gd, fmt.Errorf("zip code not found: %s", zipCode)
+		return gd, fmt.Errorf("zip code '%s' not found - please verify it's a valid US zip code", zipCode)
 	}
 	if resp.StatusCode != 200 {
-		return gd, fmt.Errorf("zip code service returned status: %d", resp.StatusCode)
+		return gd, fmt.Errorf("zip code lookup service returned error status %d", resp.StatusCode)
 	}
 
 	var zipResp ZipCodeResponse
 	err = json.NewDecoder(resp.Body).Decode(&zipResp)
 	if err != nil {
-		return gd, fmt.Errorf("error decoding zip code response: %w", err)
+		return gd, fmt.Errorf("failed to parse zip code response: %w", err)
 	}
 
 	if len(zipResp.Places) == 0 {
-		return gd, fmt.Errorf("no location data found for zip code: %s", zipCode)
+		return gd, fmt.Errorf("no location data found for zip code '%s'", zipCode)
 	}
 
 	// Convert to GeoData format
@@ -141,11 +151,11 @@ func GetGeoDataFromZip(zipCode string) (GeoData, error) {
 	// Parse coordinates
 	lat, err := strconv.ParseFloat(place.Latitude, 64)
 	if err != nil {
-		return gd, fmt.Errorf("error parsing latitude: %w", err)
+		return gd, fmt.Errorf("invalid latitude data in zip code response: %w", err)
 	}
 	lon, err := strconv.ParseFloat(place.Longitude, 64)
 	if err != nil {
-		return gd, fmt.Errorf("error parsing longitude: %w", err)
+		return gd, fmt.Errorf("invalid longitude data in zip code response: %w", err)
 	}
 
 	gd.Lat = lat

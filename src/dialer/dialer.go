@@ -2,6 +2,7 @@
 package dialer
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -22,7 +23,7 @@ func (d *DefaultHTTPClient) Get(url string, timeout time.Duration, headers map[s
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	// Set custom headers
@@ -30,7 +31,34 @@ func (d *DefaultHTTPClient) Get(url string, timeout time.Duration, headers map[s
 		req.Header.Set(key, value)
 	}
 
-	return client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		// Provide more context for common network errors
+		if isTimeoutError(err) {
+			return nil, fmt.Errorf("request timed out after %v: %w", timeout, err)
+		}
+		return nil, fmt.Errorf("network request failed: %w", err)
+	}
+
+	return resp, nil
+}
+
+// isTimeoutError checks if the error is a timeout error
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Check for timeout in error message
+	return err.Error() != "" && (hasSubstring(err.Error(), "timeout") || hasSubstring(err.Error(), "Timeout"))
+}
+
+func hasSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultClient is the default HTTP client used by the application.

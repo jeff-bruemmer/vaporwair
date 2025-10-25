@@ -148,15 +148,26 @@ func GetNOAAGridPoint(c geolocation.Coordinates) (NOAAPointsResponse, error) {
 	var points NOAAPointsResponse
 	url := fmt.Sprintf("%s/points/%s,%s", NOAABaseURL, c.Latitude, c.Longitude)
 
-	resp, err := dialer.NetReqWithUserAgent(url, 5, false, NOAAUserAgent)
+	resp, err := dialer.NetReqWithUserAgent(url, 10, false, NOAAUserAgent)
 	if err != nil {
-		return points, fmt.Errorf("error getting NOAA grid point: %v", err)
+		return points, fmt.Errorf("failed to connect to NOAA weather service at %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
+	// Check HTTP status code
+	if resp.StatusCode == 404 {
+		return points, fmt.Errorf("NOAA does not have weather data for coordinates %s, %s (location may be outside US coverage)", c.Latitude, c.Longitude)
+	}
+	if resp.StatusCode >= 500 {
+		return points, fmt.Errorf("NOAA weather service is experiencing issues (status %d) - please try again later", resp.StatusCode)
+	}
+	if resp.StatusCode != 200 {
+		return points, fmt.Errorf("NOAA weather service returned error status %d", resp.StatusCode)
+	}
+
 	err = json.NewDecoder(resp.Body).Decode(&points)
 	if err != nil {
-		return points, fmt.Errorf("error decoding NOAA points response: %v", err)
+		return points, fmt.Errorf("failed to parse NOAA grid point response: %w", err)
 	}
 
 	return points, nil
@@ -166,15 +177,31 @@ func GetNOAAGridPoint(c geolocation.Coordinates) (NOAAPointsResponse, error) {
 func GetNOAAForecast(forecastURL string) (NOAAForecastResponse, error) {
 	var forecast NOAAForecastResponse
 
-	resp, err := dialer.NetReqWithUserAgent(forecastURL, 5, false, NOAAUserAgent)
+	resp, err := dialer.NetReqWithUserAgent(forecastURL, 10, false, NOAAUserAgent)
 	if err != nil {
-		return forecast, fmt.Errorf("error getting NOAA forecast: %v", err)
+		return forecast, fmt.Errorf("failed to retrieve forecast from NOAA: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Check HTTP status code
+	if resp.StatusCode == 404 {
+		return forecast, fmt.Errorf("NOAA forecast endpoint not found (this may indicate a service change)")
+	}
+	if resp.StatusCode >= 500 {
+		return forecast, fmt.Errorf("NOAA weather service is experiencing issues (status %d) - please try again later", resp.StatusCode)
+	}
+	if resp.StatusCode != 200 {
+		return forecast, fmt.Errorf("NOAA weather service returned error status %d", resp.StatusCode)
+	}
+
 	err = json.NewDecoder(resp.Body).Decode(&forecast)
 	if err != nil {
-		return forecast, fmt.Errorf("error decoding NOAA forecast response: %v", err)
+		return forecast, fmt.Errorf("failed to parse NOAA forecast response: %w", err)
+	}
+
+	// Validate we got forecast data
+	if len(forecast.Properties.Periods) == 0 {
+		return forecast, fmt.Errorf("NOAA returned empty forecast data")
 	}
 
 	return forecast, nil
