@@ -18,6 +18,9 @@ var weatherHourly bool
 var weatherWeek bool
 var airQuality bool
 var clothingReport bool
+var insightsReport bool
+var zipCode string
+var useCurrentLocation bool
 
 // isValid checks if a cached forecast is still fresh based on elapsed time.
 // This implements optimistic caching: we assume forecasts don't change frequently,
@@ -77,22 +80,62 @@ func RunReports(f weather.Forecast, a []air.Forecast) {
 		report.AirQuality(f, a)
 	case clothingReport:
 		report.ClothingReport(f, a)
+	case insightsReport:
+		report.InsightsReport(f, a)
 	default:
 		report.Summary(f, a)
 	}
 }
 
-// GetCoordinates retrieves user's current coordinates via IP address
-// and the IP-API.
-func GetCoordinates() geolocation.Coordinates {
-	// Get geolocation data.
-	geoData, err := geolocation.GetGeoData(geolocation.IPAPIAddress)
-	if err != nil {
-		fmt.Println("Error:", err)
-		log.Fatal("Unable to determine your location. Please check your internet connection.")
+// GetCoordinates retrieves coordinates based on zip code flag, default zip, or IP address.
+func GetCoordinates(appConfig storage.AppConfig) (geolocation.Coordinates, string) {
+	var geoData geolocation.GeoData
+	var err error
+	var usedZip string
+
+	// Priority: 1) -current flag (IP), 2) -zip flag, 3) default zip from config, 4) IP geolocation
+	if useCurrentLocation {
+		// Force IP-based location (temporarily override default zip)
+		geoData, err = geolocation.GetGeoData(geolocation.IPAPIAddress)
+		if err != nil {
+			fmt.Println("Error:", err)
+			log.Fatal("Unable to determine your location. Please check your internet connection.")
+		}
+		// usedZip remains empty so we don't update the default
+	} else if zipCode != "" {
+		// Get coordinates from zip code flag
+		usedZip = zipCode
+		geoData, err = geolocation.GetGeoDataFromZip(zipCode)
+		if err != nil {
+			fmt.Println("Error:", err)
+			log.Fatal("Unable to get location from zip code. Please verify the zip code is valid.")
+		}
+	} else if appConfig.Config.DefaultZipCode != "" {
+		// Get coordinates from saved default zip code
+		usedZip = appConfig.Config.DefaultZipCode
+		geoData, err = geolocation.GetGeoDataFromZip(appConfig.Config.DefaultZipCode)
+		if err != nil {
+			fmt.Printf("Error using default zip code %s: %v\n", appConfig.Config.DefaultZipCode, err)
+			fmt.Println("Falling back to IP-based location...")
+			// Fall through to IP geolocation
+			usedZip = ""
+			geoData, err = geolocation.GetGeoData(geolocation.IPAPIAddress)
+			if err != nil {
+				fmt.Println("Error:", err)
+				log.Fatal("Unable to determine your location. Please check your internet connection.")
+			}
+		}
+	} else {
+		// Get geolocation data from IP address
+		geoData, err = geolocation.GetGeoData(geolocation.IPAPIAddress)
+		if err != nil {
+			fmt.Println("Error:", err)
+			log.Fatal("Unable to determine your location. Please check your internet connection.")
+		}
 	}
+
 	// Format coordinates and compose URLs for API calls.
-	return geolocation.FormatCoordinates(geoData)
+	return geolocation.FormatCoordinates(geoData), usedZip
 }
 
 func PrintSpaceTime(t, t1 time.Time, c geolocation.Coordinates) {
@@ -122,6 +165,9 @@ func init() {
 	flag.BoolVar(&weatherWeek, "w", false, "Prints daily weather forecast for the next week.")
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
 	flag.BoolVar(&clothingReport, "c", false, "Prints clothing recommendations based on weather (what to wair).")
+	flag.BoolVar(&insightsReport, "i", false, "Prints comparative analysis and time-based insights.")
+	flag.StringVar(&zipCode, "zip", "", "Get weather for a specific US zip code (e.g., -zip=10001).")
+	flag.BoolVar(&useCurrentLocation, "current", false, "Use current IP-based location (temporary override).")
 }
 
 // setupConfiguration initializes the configuration directory and loads API keys.
@@ -188,9 +234,27 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config, date 
 //   1. Time-based: Cache expires after CacheTimeoutMinutes (default: 5 minutes)
 //   2. Location-based: Cache is tied to coordinates from last API call
 //   3. Existence-based: Missing cache files trigger a fresh API call
+//   4. Override flags: When -zip or -current flags are used, ignore cache
+//   5. Default zip: When default zip code is set, ignore IP-based cache
 //
 // This optimistic approach prioritizes speed over freshness for recent queries.
 func loadCachedForecasts(appConfig storage.AppConfig, t time.Time, spinnerDone chan bool, spinnerResult chan time.Time) bool {
+	// Skip cache if user specified a zip code via flag (they want a specific location)
+	if zipCode != "" {
+		return false
+	}
+
+	// Skip cache if user requested current IP-based location
+	if useCurrentLocation {
+		return false
+	}
+
+	// Skip cache if default zip code is set (using zip-based location instead of IP)
+	// This ensures we don't mix IP-based and zip-based forecasts
+	if appConfig.Config.DefaultZipCode != "" {
+		return false
+	}
+
 	pc, err := storage.LoadCallInfo(appConfig.HomeDir + storage.SavedCallFileName)
 	if err != nil {
 		return false // No cache available
@@ -248,7 +312,7 @@ func main() {
 	}
 
 	// Cache miss or expired - need to fetch new forecasts
-	coordinates := GetCoordinates()
+	coordinates, usedZip := GetCoordinates(appConfig)
 	wf, af, err := fetchForecasts(coordinates, appConfig.Config, t.Format("2006-01-02"))
 	if err != nil {
 		log.Fatal(err)
@@ -263,4 +327,13 @@ func main() {
 
 	// Save forecasts for future use
 	SaveForecasts(appConfig.HomeDir, coordinates, wf, af)
+
+	// If a zip code was used (either from flag or default), save it as the new default
+	if usedZip != "" && usedZip != appConfig.Config.DefaultZipCode {
+		err = storage.UpdateDefaultZipCode(appConfig.HomeDir, usedZip)
+		if err != nil {
+			// Non-fatal error - just log it
+			fmt.Printf("Note: Could not save default zip code: %v\n", err)
+		}
+	}
 }

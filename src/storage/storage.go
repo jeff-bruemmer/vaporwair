@@ -39,7 +39,8 @@ const (
 // Config stores API keys and application settings.
 // Note: NOAA API does not require an API key.
 type Config struct {
-	AirNowAPIKey string `json:"airnowapikey"`
+	AirNowAPIKey   string `json:"airnowapikey"`
+	DefaultZipCode string `json:"defaultzipcode,omitempty"`
 }
 
 // AppConfig holds runtime configuration for the application.
@@ -199,6 +200,28 @@ func InitializeAppConfig() (AppConfig, error) {
 	appConfig.Config = GetConfig(configFile)
 
 	return appConfig, nil
+}
+
+// UpdateDefaultZipCode saves the zip code as the default in the config file.
+func UpdateDefaultZipCode(homeDir string, zipCode string) error {
+	configFile := homeDir + ConfigFileName
+	config := GetConfig(configFile)
+
+	// Update the default zip code
+	config.DefaultZipCode = zipCode
+
+	// Save back to file
+	configData, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("error marshalling config: %w", err)
+	}
+
+	err = ioutil.WriteFile(configFile, configData, 0644)
+	if err != nil {
+		return fmt.Errorf("error writing config file: %w", err)
+	}
+
+	return nil
 }
 
 func UpdateLastCall(c geolocation.Coordinates, path string) error {

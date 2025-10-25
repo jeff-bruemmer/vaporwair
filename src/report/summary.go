@@ -1,6 +1,7 @@
 package report
 
 import (
+	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 )
@@ -17,4 +18,9 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	AirQualityIndex(a)
 	UVIndex(w)
 	Precipitation(w)
+	TW.Flush()
+
+	// Add clothing recommendations
+	fmt.Println()
+	ClothingSummary(w, a)
 }

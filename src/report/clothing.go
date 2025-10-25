@@ -194,6 +194,41 @@ func GetClothingRecommendationWithAir(f weather.Forecast, a []air.Forecast) Clot
 	return rec
 }
 
+// ClothingSummary prints a condensed clothing recommendation for the default report.
+func ClothingSummary(w weather.Forecast, a []air.Forecast) {
+	rec := GetClothingRecommendationWithAir(w, a)
+
+	fmt.Println(Title("What to Wear"))
+
+	// Base outfit
+	fmt.Fprintf(TW, "Outfit:\t%s\n", rec.Outfit)
+
+	// Accessories (show up to 3 most important)
+	if len(rec.Accessories) > 0 {
+		count := len(rec.Accessories)
+		if count > 3 {
+			count = 3
+		}
+		accessoryList := strings.Join(rec.Accessories[:count], ", ")
+		if len(rec.Accessories) > 3 {
+			accessoryList += fmt.Sprintf(", +%d more", len(rec.Accessories)-3)
+		}
+		fmt.Fprintf(TW, "Bring:\t%s\n", accessoryList)
+	}
+
+	// Show most important tip (first one)
+	if len(rec.Notes) > 0 {
+		fmt.Fprintf(TW, "Tip:\t%s\n", rec.Notes[0])
+	}
+
+	TW.Flush()
+
+	// Show how to get full details
+	if len(rec.Notes) > 1 || len(rec.Accessories) > 3 {
+		fmt.Println("(Run with -c flag for detailed clothing recommendations)")
+	}
+}
+
 // ClothingReport prints a "What to Wear" (wair) recommendation report.
 func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("What to Wear Today"))
