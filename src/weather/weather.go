@@ -132,27 +132,28 @@ type NOAAForecastProperties struct {
 }
 
 type NOAAPeriod struct {
-	Number                     int    `json:"number"`
-	Name                       string `json:"name"`
-	StartTime                  string `json:"startTime"`
-	EndTime                    string `json:"endTime"`
-	IsDaytime                  bool   `json:"isDaytime"`
-	Temperature                int    `json:"temperature"`
-	TemperatureUnit            string `json:"temperatureUnit"`
-	TemperatureTrend           string `json:"temperatureTrend"`
-	WindSpeed                  string `json:"windSpeed"`
-	WindDirection              string `json:"windDirection"`
-	Icon                       string `json:"icon"`
-	ShortForecast              string `json:"shortForecast"`
-	DetailedForecast           string `json:"detailedForecast"`
+	Number                     int       `json:"number"`
+	Name                       string    `json:"name"`
+	StartTime                  string    `json:"startTime"`
+	EndTime                    string    `json:"endTime"`
+	IsDaytime                  bool      `json:"isDaytime"`
+	Temperature                int       `json:"temperature"`
+	TemperatureUnit            string    `json:"temperatureUnit"`
+	TemperatureTrend           *string   `json:"temperatureTrend"` // Nullable
+	WindSpeed                  string    `json:"windSpeed"`
+	WindGust                   *string   `json:"windGust"` // Nullable
+	WindDirection              string    `json:"windDirection"`
+	Icon                       string    `json:"icon"`
+	ShortForecast              string    `json:"shortForecast"`
+	DetailedForecast           string    `json:"detailedForecast"`
 	ProbabilityOfPrecipitation NOAAValue `json:"probabilityOfPrecipitation"`
 	Dewpoint                   NOAAValue `json:"dewpoint"`
 	RelativeHumidity           NOAAValue `json:"relativeHumidity"`
 }
 
 type NOAAValue struct {
-	UnitCode string  `json:"unitCode"`
-	Value    float64 `json:"value"`
+	UnitCode string   `json:"unitCode"`
+	Value    *float64 `json:"value"` // Pointer to handle null values
 }
 
 // BuildAirNowURL creates http address for dialer to call Dark Sky API.
@@ -263,19 +264,26 @@ func convertNOAAPeriodToDataPoint(period NOAAPeriod) DataPoint {
 	dp.Summary = period.ShortForecast
 	dp.Icon = mapNOAAIconToIcon(period.ShortForecast)
 	dp.Temperature = float64(period.Temperature)
-	dp.PrecipProbability = period.ProbabilityOfPrecipitation.Value / 100.0
+
+	// Handle precipitation probability (can be null)
+	if period.ProbabilityOfPrecipitation.Value != nil {
+		dp.PrecipProbability = *period.ProbabilityOfPrecipitation.Value / 100.0
+	}
 
 	// Parse wind speed (format: "10 to 15 mph" or "10 mph")
 	dp.WindSpeed = parseWindSpeed(period.WindSpeed)
 	dp.WindBearing = parseWindDirection(period.WindDirection)
 
-	// Convert dewpoint from Celsius to Fahrenheit if needed
-	if period.Dewpoint.Value != 0 {
-		dp.DewPoint = celsiusToFahrenheit(period.Dewpoint.Value)
+	// Convert dewpoint from Celsius to Fahrenheit if available
+	// NOAA API returns dewpoint in Celsius (unitCode: "wmoUnit:degC")
+	if period.Dewpoint.Value != nil && *period.Dewpoint.Value != 0 {
+		dp.DewPoint = celsiusToFahrenheit(*period.Dewpoint.Value)
 	}
 
-	// Humidity
-	dp.Humidity = period.RelativeHumidity.Value / 100.0
+	// Humidity (convert from percentage)
+	if period.RelativeHumidity.Value != nil {
+		dp.Humidity = *period.RelativeHumidity.Value / 100.0
+	}
 
 	return dp
 }
@@ -327,14 +335,23 @@ func convertNOAADailyPeriodsToDataBlock(periods []NOAAPeriod) DataBlock {
 			dp.TemperatureMin = float64(nightPeriod.Temperature)
 		}
 
-		dp.PrecipProbability = dayPeriod.ProbabilityOfPrecipitation.Value / 100.0
+		// Handle precipitation probability (can be null)
+		if dayPeriod.ProbabilityOfPrecipitation.Value != nil {
+			dp.PrecipProbability = *dayPeriod.ProbabilityOfPrecipitation.Value / 100.0
+		}
+
 		dp.WindSpeed = parseWindSpeed(dayPeriod.WindSpeed)
 		dp.WindBearing = parseWindDirection(dayPeriod.WindDirection)
 
-		if dayPeriod.Dewpoint.Value != 0 {
-			dp.DewPoint = celsiusToFahrenheit(dayPeriod.Dewpoint.Value)
+		// Convert dewpoint from Celsius to Fahrenheit if available
+		if dayPeriod.Dewpoint.Value != nil && *dayPeriod.Dewpoint.Value != 0 {
+			dp.DewPoint = celsiusToFahrenheit(*dayPeriod.Dewpoint.Value)
 		}
-		dp.Humidity = dayPeriod.RelativeHumidity.Value / 100.0
+
+		// Humidity (convert from percentage)
+		if dayPeriod.RelativeHumidity.Value != nil {
+			dp.Humidity = *dayPeriod.RelativeHumidity.Value / 100.0
+		}
 
 		dailyData = append(dailyData, dp)
 	}
