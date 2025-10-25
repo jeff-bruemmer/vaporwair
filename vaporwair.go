@@ -17,6 +17,7 @@ import (
 var weatherHourly bool
 var weatherWeek bool
 var airQuality bool
+var clothingReport bool
 
 // isValid checks if a cached forecast is still fresh based on elapsed time.
 // This implements optimistic caching: we assume forecasts don't change frequently,
@@ -74,6 +75,8 @@ func RunReports(f weather.Forecast, a []air.Forecast) {
 		report.WeatherWeek(f, a)
 	case airQuality:
 		report.AirQuality(f, a)
+	case clothingReport:
+		report.ClothingReport(f, a)
 	default:
 		report.Summary(f, a)
 	}
@@ -118,6 +121,7 @@ func init() {
 	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour.")
 	flag.BoolVar(&weatherWeek, "w", false, "Prints daily weather forecast for the next week.")
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
+	flag.BoolVar(&clothingReport, "c", false, "Prints clothing recommendations based on weather (what to wair).")
 }
 
 // setupConfiguration initializes the configuration directory and loads API keys.
