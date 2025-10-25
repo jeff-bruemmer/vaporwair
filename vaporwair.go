@@ -91,7 +91,7 @@ func RunReports(f weather.Forecast, a []air.Forecast) {
 	case insightsReport:
 		report.InsightsReport(f, a)
 	default:
-		report.Summary(f, a)
+		report.InsightsReport(f, a)
 	}
 }
 
@@ -142,8 +142,19 @@ func GetCoordinates(appConfig storage.AppConfig) (geolocation.Coordinates, strin
 	return geolocation.FormatCoordinates(geoData), usedZip
 }
 
+func PrintBanner() {
+	banner := `
+██╗   ██╗ █████╗ ██████╗  ██████╗ ██████╗ ██╗    ██╗ █████╗ ██╗██████╗
+██║   ██║██╔══██╗██╔══██╗██╔═══██╗██╔══██╗██║    ██║██╔══██╗██║██╔══██╗
+██║   ██║███████║██████╔╝██║   ██║██████╔╝██║ █╗ ██║███████║██║██████╔╝
+╚██╗ ██╔╝██╔══██║██╔═══╝ ██║   ██║██╔══██╗██║███╗██║██╔══██║██║██╔══██╗
+ ╚████╔╝ ██║  ██║██║     ╚██████╔╝██║  ██║╚███╔███╔╝██║  ██║██║██║  ██║
+  ╚═══╝  ╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝
+`
+	fmt.Println(banner)
+}
+
 func PrintSpaceTime(t, t1 time.Time, c geolocation.Coordinates) {
-	PrintElapsedTime(t1)
 	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
 	fmt.Println(c.City, c.Zip, "|", c.Latitude, ",", c.Longitude)
 }
@@ -288,6 +299,7 @@ func loadCachedForecasts(appConfig storage.AppConfig, t time.Time, spinnerDone c
 	// Stop spinner and print results
 	spinnerDone <- true
 	t1 := <-spinnerResult
+	PrintBanner()
 	PrintSpaceTime(t, t1, pc.Coordinates)
 	RunReports(pwf, paf)
 	report.TW.Flush()
@@ -330,6 +342,7 @@ func main() {
 	// Stop spinner and display results
 	spinnerDone <- true
 	t1 := <-spinnerResult
+	PrintBanner()
 	PrintSpaceTime(t, t1, coordinates)
 	RunReports(wf, af)
 	report.TW.Flush()

@@ -59,4 +59,8 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 	UVIndex(w)
 
 	TW.Flush()
+
+	// Clothing recommendations
+	fmt.Fprintln(TW, "")
+	ClothingSummary(w, a)
 }
