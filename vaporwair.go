@@ -196,7 +196,7 @@ func setupConfiguration() (storage.AppConfig, error) {
 
 // fetchForecasts retrieves weather and air quality forecasts for given coordinates.
 // Returns weather forecast and air quality forecast.
-func fetchForecasts(coords geolocation.Coordinates, config storage.Config, date string) (weather.Forecast, []air.Forecast, error) {
+func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weather.Forecast, []air.Forecast, error) {
 	weatherChan := make(chan weather.Forecast)
 	airChan := make(chan []air.Forecast)
 	errChan := make(chan error, 2)
@@ -213,8 +213,8 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config, date 
 
 	// Fetch air quality forecast
 	go func() {
-		if config.AirNowAPIKey != "" {
-			anURL := air.BuildAirNowURL(air.AirNowAddress, coords, date, config.AirNowAPIKey)
+		if config.AirNowAPIKey != "" && coords.Zip != "" {
+			anURL := air.BuildAirNowURL(air.AirNowAddress, coords.Zip, config.AirNowAPIKey)
 			forecast := air.GetForecast(anURL)
 			airChan <- forecast
 		} else {
@@ -320,7 +320,7 @@ func main() {
 
 	// Cache miss or expired - need to fetch new forecasts
 	coordinates, usedZip := GetCoordinates(appConfig)
-	wf, af, err := fetchForecasts(coordinates, appConfig.Config, t.Format("2006-01-02"))
+	wf, af, err := fetchForecasts(coordinates, appConfig.Config)
 	if err != nil {
 		spinnerDone <- true
 		<-spinnerResult

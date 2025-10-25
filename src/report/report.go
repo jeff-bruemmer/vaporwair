@@ -165,10 +165,17 @@ func AirQualityIndex(f []air.Forecast) {
 	aqi := -1 // Initialize to -1 to detect if we found any valid AQI values
 	var particle string
 	var category string
+	var categoryOnly string // For when AQI is unavailable but category is
+
 	for _, measurement := range f {
 		// We are only interested in the highest AQI for today.
 		if measurement.DateForecast != today {
 			break
+		}
+
+		// Even if AQI is -1, capture category information
+		if measurement.Category.Name != "" && categoryOnly == "" {
+			categoryOnly = measurement.Category.Name
 		}
 
 		// Skip measurements with invalid AQI values (AirNow returns -1 for unavailable forecasts)
@@ -185,13 +192,20 @@ func AirQualityIndex(f []air.Forecast) {
 		}
 	}
 
-	// If no valid AQI found, display appropriate message
-	if aqi < 0 {
-		fmt.Fprintf(TW, formatMultipleValues, "Air Quality Index", "N/A", "Forecast", "not yet available")
+	// If we have a valid AQI, show it with details
+	if aqi >= 0 {
+		fmt.Fprintf(TW, formatMultipleValues, "Air Quality Index", aqi, particle, category)
 		return
 	}
 
-	fmt.Fprintf(TW, formatMultipleValues, "Air Quality Index", aqi, particle, category)
+	// If no AQI but we have category info, show that
+	if categoryOnly != "" {
+		fmt.Fprintf(TW, formatMultipleValues, "Air Quality", categoryOnly, "(numeric", "forecast pending)")
+		return
+	}
+
+	// No data at all
+	fmt.Fprintf(TW, formatMultipleValues, "Air Quality Index", "N/A", "Forecast", "not yet available")
 }
 
 // Prints the summary for the day.

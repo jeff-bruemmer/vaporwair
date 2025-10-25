@@ -17,42 +17,60 @@ func AirQuality(w weather.Forecast, a []air.Forecast) {
 		return
 	}
 
-	// Check if all AQI values are -1 (forecast not yet calculated)
-	allUnavailable := true
+	// Check if we have any category data to display (even if numeric AQI is -1)
+	hasData := false
 	for _, f := range a {
-		if f.AQI >= 0 {
-			allUnavailable = false
+		if f.Category.Name != "" {
+			hasData = true
 			break
 		}
 	}
 
-	if allUnavailable {
-		fmt.Println("\nAir quality forecasts are not yet available.")
-		fmt.Println("AirNow typically publishes forecasts later in the day.")
+	if !hasData {
+		fmt.Println("\nNo air quality data available.")
 		return
 	}
 
 	format := "%s\t%v\t%v\t%s\n"
+	formatNoPending := "%s\t%s\t%v\t%s\n"
 	date := ""
 	fmt.Fprintf(TW, "Type\tAQI\tCategory\tDescription\n")
 	fmt.Fprintf(TW, "----\t---\t--------\t-----------\n")
 	for _, f := range a {
-		// Skip entries with invalid AQI (-1 means not yet calculated)
-		if f.AQI < 0 {
-			continue
-		}
-
 		if f.DateForecast != date {
 			fmt.Println()
 			date = f.DateForecast
 			fmt.Println(date)
 			fmt.Println("==========")
 		}
-		fmt.Fprintf(TW, format,
-			f.ParameterName,
-			f.AQI,
-			f.Category.Number,
-			f.Category.Name)
+
+		// If we have a numeric AQI, show it
+		if f.AQI >= 0 {
+			fmt.Fprintf(TW, format,
+				f.ParameterName,
+				f.AQI,
+				f.Category.Number,
+				f.Category.Name)
+		} else {
+			// No numeric AQI yet, but show category if available
+			fmt.Fprintf(TW, formatNoPending,
+				f.ParameterName,
+				"pending",
+				f.Category.Number,
+				f.Category.Name)
+		}
 		TW.Flush()
+	}
+
+	// Add note if any AQI values are pending
+	anyPending := false
+	for _, f := range a {
+		if f.AQI < 0 {
+			anyPending = true
+			break
+		}
+	}
+	if anyPending {
+		fmt.Println("\nNote: Numeric AQI values marked 'pending' will be updated later in the day.")
 	}
 }

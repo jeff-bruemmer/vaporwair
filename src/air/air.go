@@ -5,7 +5,6 @@ package air
 import (
 	"encoding/json"
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
-	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 	"log"
 )
 
@@ -21,12 +20,24 @@ type AirNowProvider struct{}
 // GetForecast retrieves air quality forecast from AirNow API.
 func (p *AirNowProvider) GetForecast(addr string) []Forecast {
 	var af []Forecast
+
 	resp, err := dialer.NetReq(addr, 10, false)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Warning: AirNow API request failed: %v\n", err)
+		return []Forecast{}
 	}
 	defer resp.Body.Close()
-	json.NewDecoder(resp.Body).Decode(&af)
+
+	if resp.StatusCode != 200 {
+		log.Printf("Warning: AirNow API returned status %d - air quality data unavailable\n", resp.StatusCode)
+		return []Forecast{}
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&af)
+	if err != nil {
+		log.Printf("Warning: Failed to decode AirNow response: %v\n", err)
+		return []Forecast{}
+	}
 
 	// If API returns null or decode fails, return empty slice instead of nil
 	if af == nil {
@@ -57,14 +68,12 @@ type Forecast struct {
 	Discussion    string   `json:"Discussion"`
 }
 
-const AirNowAddress = "https://www.airnowapi.org/aq/forecast/latLong/?format=application/json&"
+const AirNowAddress = "https://www.airnowapi.org/aq/observation/zipCode/current/?format=application/json&"
 
 // BuildAirNowURL creates http address for dialer to call Air Now API.
-func BuildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey string) string {
+func BuildAirNowURL(addr string, zipCode string, apiKey string) string {
 	return addr +
-		"latitude=" + c.Latitude +
-		"&longitude=" + c.Longitude +
-		"&date=" + date +
+		"zipCode=" + zipCode +
 		"&distance=25" +
 		"&API_KEY=" + apiKey
 }
