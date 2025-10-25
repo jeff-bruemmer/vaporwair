@@ -9,6 +9,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/storage"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 	"log"
+	"os"
 	"strings"
 	"time"
 )
@@ -176,6 +177,14 @@ func SaveForecasts(homeDir string, coordinates geolocation.Coordinates, wf weath
 
 // Assign commandline flags.
 func init() {
+	flag.Usage = func() {
+		PrintBanner()
+		fmt.Fprintf(os.Stderr, "\nUsage: vaporwair [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nWithout any flags, vaporwair displays the insights report (comparative analysis & weather recommendations).\n")
+	}
+
 	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour.")
 	flag.BoolVar(&weatherWeek, "w", false, "Prints daily weather forecast for the next week.")
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
