@@ -7,19 +7,16 @@ import (
 	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
-	"log"
 	"time"
 )
 
 type Flags struct {
-	DarkSkyUnavailable string   `json:"darksky-unavailable"`
-	DarkSkyStation     string   `json:"datapoint-stations"`
-	ISDStations        []string `json:"isds-stations"`
-	LAMPStations       []string `json:"lamp-stations"`
-	METARStations      []string `json:"metars-stations"`
-	METNOLicense       string   `json:"metnol-license"`
-	Sources            []string `json:"sources"`
-	Units              string   `json:"units"`
+	ISDStations  []string `json:"isds-stations"`
+	LAMPStations []string `json:"lamp-stations"`
+	METARStations []string `json:"metars-stations"`
+	METNOLicense string   `json:"metnol-license"`
+	Sources      []string `json:"sources"`
+	Units        string   `json:"units"`
 }
 
 type DataPoint struct {
@@ -39,9 +36,11 @@ type DataPoint struct {
 	TemperatureMinTime     float64 `json:"temperatureMinTime"`
 	TemperatureMax         float64 `json:"temperatureMax"`
 	TemperatureMaxTime     float64 `json:"temperatureMaxTime"`
+	TemperatureTrend       string  `json:"temperatureTrend"`
 	ApparentTemperature    float64 `json:"apparentTemperature"`
 	DewPoint               float64 `json:"dewPoint"`
 	WindSpeed              float64 `json:"windSpeed"`
+	WindGust               float64 `json:"windGust"`
 	WindBearing            float64 `json:"windBearing"`
 	CloudCover             float64 `json:"cloudCover"`
 	Humidity               float64 `json:"humidity"`
@@ -51,6 +50,7 @@ type DataPoint struct {
 	MoonPhase              float64 `json:"moonPhase"`
 	UVIndex                float64 `json:"uvIndex"`
 	UVIndexTime            float64 `json:"uvIndexTime"`
+	DetailedForecast       string  `json:"detailedForecast"`
 }
 
 type DataBlock struct {
@@ -81,19 +81,6 @@ type Forecast struct {
 	APICalls  int       `json:"apicalls"`
 	Code      int       `json:"code"`
 }
-
-type Units string
-
-const (
-	CA   Units = "ca"
-	SI   Units = "si"
-	US   Units = "us"
-	UK   Units = "uk"
-	AUTO Units = "auto"
-)
-
-const DarkSkyAddress = "https://api.darksky.net/forecast/"
-const DarkSkyUnits = "auto"
 
 // NOAA API constants
 const NOAABaseURL = "https://api.weather.gov"
@@ -154,38 +141,6 @@ type NOAAPeriod struct {
 type NOAAValue struct {
 	UnitCode string   `json:"unitCode"`
 	Value    *float64 `json:"value"` // Pointer to handle null values
-}
-
-// BuildAirNowURL creates http address for dialer to call Dark Sky API.
-func BuildDarkSkyURL(addr string, apikey string, c geolocation.Coordinates, units string) string {
-	return addr +
-		apikey +
-		"/" +
-		c.Latitude +
-		"," +
-		c.Longitude +
-		"?units=" +
-		units
-}
-
-// GetForecast dials the Dark Sky API and returns a Forecast.
-func GetForecast(addr string) Forecast {
-	var wf Forecast
-	// Request coordinates from ip-api and specify timeout in seconds
-	// Set gzip bool to false for NOAA API.
-	resp, err := dialer.NetReq(addr, 5, false)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	// Decode JSON response directly into weather forecast.
-	err = json.NewDecoder(resp.Body).Decode(&wf)
-	if err != nil {
-		fmt.Println("Error decoding JSON response from weather API.")
-		log.Fatal(err)
-	}
-	return wf
 }
 
 // GetNOAAGridPoint gets the grid coordinates for a given lat/lon from NOAA API.
@@ -262,16 +217,19 @@ func convertNOAAPeriodToDataPoint(period NOAAPeriod) DataPoint {
 	t, _ := time.Parse(time.RFC3339, period.StartTime)
 	dp.Time = float64(t.Unix())
 	dp.Summary = period.ShortForecast
+	dp.DetailedForecast = period.DetailedForecast
 	dp.Icon = mapNOAAIconToIcon(period.ShortForecast)
 	dp.Temperature = float64(period.Temperature)
+	dp.TemperatureTrend = getTemperatureTrend(period.TemperatureTrend)
 
 	// Handle precipitation probability (can be null)
 	if period.ProbabilityOfPrecipitation.Value != nil {
 		dp.PrecipProbability = *period.ProbabilityOfPrecipitation.Value / 100.0
 	}
 
-	// Parse wind speed (format: "10 to 15 mph" or "10 mph")
+	// Parse wind speed and gust
 	dp.WindSpeed = parseWindSpeed(period.WindSpeed)
+	dp.WindGust = parseWindGust(period.WindGust)
 	dp.WindBearing = parseWindDirection(period.WindDirection)
 
 	// Convert dewpoint from Celsius to Fahrenheit if available
@@ -286,6 +244,25 @@ func convertNOAAPeriodToDataPoint(period NOAAPeriod) DataPoint {
 	}
 
 	return dp
+}
+
+// parseWindGust extracts wind gust speed from NOAA wind gust string.
+// Returns 0 if no gust data is available.
+func parseWindGust(gust *string) float64 {
+	if gust == nil || *gust == "" {
+		return 0
+	}
+	var speed float64
+	fmt.Sscanf(*gust, "%f", &speed)
+	return speed
+}
+
+// getTemperatureTrend returns temperature trend string if available.
+func getTemperatureTrend(trend *string) string {
+	if trend == nil {
+		return ""
+	}
+	return *trend
 }
 
 // Helper function to convert NOAA periods to DataBlock.
@@ -335,10 +312,12 @@ func convertNOAADailyPeriodsToDataBlock(periods []NOAAPeriod) DataBlock {
 		t, _ := time.Parse(time.RFC3339, dayPeriod.StartTime)
 		dp.Time = float64(t.Unix())
 		dp.Summary = dayPeriod.ShortForecast
+		dp.DetailedForecast = dayPeriod.DetailedForecast
 		dp.Icon = mapNOAAIconToIcon(dayPeriod.ShortForecast)
 
 		// Set temperature max from day period, min from night period
 		dp.TemperatureMax = float64(dayPeriod.Temperature)
+		dp.TemperatureTrend = getTemperatureTrend(dayPeriod.TemperatureTrend)
 		if hasNightPeriod {
 			dp.TemperatureMin = float64(nightPeriod.Temperature)
 		}
@@ -349,6 +328,7 @@ func convertNOAADailyPeriodsToDataBlock(periods []NOAAPeriod) DataBlock {
 		}
 
 		dp.WindSpeed = parseWindSpeed(dayPeriod.WindSpeed)
+		dp.WindGust = parseWindGust(dayPeriod.WindGust)
 		dp.WindBearing = parseWindDirection(dayPeriod.WindDirection)
 
 		// Convert dewpoint from Celsius to Fahrenheit if available

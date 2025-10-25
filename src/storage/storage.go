@@ -16,16 +16,37 @@ import (
 	"time"
 )
 
-const VaporwairDir = "/.vaporwair/"
-const SavedWeatherFileName = VaporwairDir + "weather-forecast.json"
-const SavedAirFileName = VaporwairDir + "air-forecast.json"
-const ConfigFileName = VaporwairDir + "config.json"
-const SavedCallFileName = VaporwairDir + "last-call.json"
+// Application configuration constants for caching and storage.
+//
+// Caching Strategy:
+// Vaporwair uses optimistic caching to reduce API calls and improve response times.
+// Forecasts are cached to disk with metadata (timestamp, coordinates) and served
+// from cache when:
+//   - Less than CacheTimeoutMinutes have elapsed since last fetch
+//   - User location hasn't changed
+//
+// This approach assumes weather forecasts don't change frequently enough to
+// warrant fetching fresh data on every request within the timeout window.
+const (
+	VaporwairDir           = "/.vaporwair/"
+	SavedWeatherFileName   = VaporwairDir + "weather-forecast.json"
+	SavedAirFileName       = VaporwairDir + "air-forecast.json"
+	ConfigFileName         = VaporwairDir + "config.json"
+	SavedCallFileName      = VaporwairDir + "last-call.json"
+	CacheTimeoutMinutes    = 5  // How long cached forecasts remain valid
+)
 
-// The Config type is used to store API keys.
+// Config stores API keys and application settings.
 // Note: NOAA API does not require an API key.
 type Config struct {
-	AirNowAPIKey  string `json:"airnowapikey"`
+	AirNowAPIKey string `json:"airnowapikey"`
+}
+
+// AppConfig holds runtime configuration for the application.
+type AppConfig struct {
+	Config             Config
+	HomeDir            string
+	CacheTimeoutMinutes float64
 }
 
 // APICallInfo contains metadata to determine validity of last API call.
@@ -122,7 +143,7 @@ func LoadSavedAir(path string) ([]air.Forecast, error) {
 	return f, nil
 }
 
-// Checks home folder for vaporwair config file to retrieve API keys.
+// GetConfig loads API keys from the config file.
 func GetConfig(filepath string) Config {
 	configFile, err := os.Open(filepath)
 	if err != nil {
@@ -143,6 +164,41 @@ func GetConfig(filepath string) Config {
 	config.AirNowAPIKey = strings.TrimSpace(config.AirNowAPIKey)
 
 	return config
+}
+
+// InitializeAppConfig sets up and returns the complete application configuration.
+// It creates necessary directories and files if they don't exist.
+func InitializeAppConfig() (AppConfig, error) {
+	var appConfig AppConfig
+
+	homeDir, err := GetHomeDir()
+	if err != nil {
+		return appConfig, fmt.Errorf("unable to determine home directory: %w", err)
+	}
+
+	appConfig.HomeDir = homeDir
+	appConfig.CacheTimeoutMinutes = CacheTimeoutMinutes
+
+	// Create vaporwair directory if it doesn't exist
+	CreateVaporwairDir(homeDir + VaporwairDir)
+
+	// Check if configuration file exists
+	configFile := homeDir + ConfigFileName
+	configExists, _ := Exists(configFile)
+
+	// If config doesn't exist, create it with user input
+	if !configExists {
+		ANAPIKey := Capture("Enter Air Now API key: ")
+		err := CreateConfig(homeDir, ANAPIKey)
+		if err != nil {
+			return appConfig, fmt.Errorf("error creating configuration: %w", err)
+		}
+	}
+
+	// Load API keys
+	appConfig.Config = GetConfig(configFile)
+
+	return appConfig, nil
 }
 
 func UpdateLastCall(c geolocation.Coordinates, path string) error {

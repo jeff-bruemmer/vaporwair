@@ -6,42 +6,56 @@ import (
 	"time"
 )
 
-// NetReq returns an *http.Response, or times out after a specified duration.
-func NetReq(url string, s time.Duration, gzip bool) (*http.Response, error) {
-	t := time.Duration(s * time.Second)
-	c := http.Client{
-		Timeout: t,
+// HTTPClient defines an interface for making HTTP requests.
+// This allows for easy mocking in tests.
+type HTTPClient interface {
+	Get(url string, timeout time.Duration, headers map[string]string) (*http.Response, error)
+}
+
+// DefaultHTTPClient implements HTTPClient using the standard http.Client.
+type DefaultHTTPClient struct{}
+
+// Get performs an HTTP GET request with the specified timeout and headers.
+func (d *DefaultHTTPClient) Get(url string, timeout time.Duration, headers map[string]string) (*http.Response, error) {
+	client := &http.Client{
+		Timeout: timeout,
 	}
-	req, _ := http.NewRequest("GET", url, nil)
-	// Dark Sky uses gzip
-	if gzip {
-		req.Header.Set("Accept-Encoding", "gzip")
-	}
-	resp, err := c.Do(req)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-	return resp, nil
+
+	// Set custom headers
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	return client.Do(req)
+}
+
+// DefaultClient is the default HTTP client used by the application.
+var DefaultClient HTTPClient = &DefaultHTTPClient{}
+
+// NetReq returns an *http.Response, or times out after a specified duration.
+// Uses the default HTTP client.
+func NetReq(url string, s time.Duration, gzip bool) (*http.Response, error) {
+	headers := make(map[string]string)
+	if gzip {
+		headers["Accept-Encoding"] = "gzip"
+	}
+	return DefaultClient.Get(url, s*time.Second, headers)
 }
 
 // NetReqWithUserAgent returns an *http.Response with a custom User-Agent header,
 // or times out after a specified duration.
+// Uses the default HTTP client.
 func NetReqWithUserAgent(url string, s time.Duration, gzip bool, userAgent string) (*http.Response, error) {
-	t := time.Duration(s * time.Second)
-	c := http.Client{
-		Timeout: t,
-	}
-	req, _ := http.NewRequest("GET", url, nil)
-	// Set User-Agent header (required for NOAA API)
+	headers := make(map[string]string)
 	if userAgent != "" {
-		req.Header.Set("User-Agent", userAgent)
+		headers["User-Agent"] = userAgent
 	}
 	if gzip {
-		req.Header.Set("Accept-Encoding", "gzip")
+		headers["Accept-Encoding"] = "gzip"
 	}
-	resp, err := c.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return DefaultClient.Get(url, s*time.Second, headers)
 }

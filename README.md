@@ -20,19 +20,23 @@ Most weather reports do not include air quality, and both air quality and weathe
 The default report includes a brief description of the weather, min and max temps, humidity, air quality index, and more.
 ```
 $ vaporwair
-This week:            Light rain today, with high temperatures bottoming out at 59°F on Sunday.
-Currently:            Partly Cloudy.
-Current Temperature:  61 °F
-Min Temperature:      51 °F at 23:00 HH:MM
-Max Temperature:      61 °F at 15:00 HH:MM
-Humidity:             74 %
-Wind speed:            3 mph
-Air Quality Index:    33 PM2.5 Good
-Precipitation:        69 %
-Precip Type:          rain 
-Sunrise:              06:15 HH:MM
-Sunset:               17:55 HH:MM
+Forecasts fetched in 0.50 seconds.
+Fri Oct 24 21:22:08 EDT 2025
+Lebanon 03766 | 43.6444 , -72.2455
+This week:            Mostly cloudy, with a low around 33. Northwest wind around 0 mph.
+Currently:            Mostly Cloudy.
+Current Temperature:  46 °F
+Min Temperature:      33 °F
+Max Temperature:      50 °F
+Humidity:             83 %
+Windspeed:            0 mph
+Air Quality Index:    N/A Forecast not yet available
+UV Index:             0
+Precipitation:        3 %
+Precip Type:
 ```
+
+**Note:** Air quality forecasts from AirNow may show as "not yet available" early in the day, as forecasts are typically published later. When available, it displays the AQI value, pollutant type, and category (e.g., "55 O3 Moderate").
 
 ### Hourly weather
 The hourly weather report prints a short description of the forecast, as well as the expected temperature, precipitation, precipitation intensity, and wind speed for the next 12 hours.
@@ -74,26 +78,33 @@ Wed       50 °F     66 °F     4 %       rain      35 %      7 mph
 ```
 
 ### Air Quality Report
-The air quality report prints the air quality index for five pollutants for the next two days.
+The air quality report prints the air quality index for multiple pollutants (typically O3 and PM2.5) for the next several days.
+
+When forecasts are available:
 ```
 $ vaporwair -a
-2019-03-07 
+-- AIR QUALITY FORECAST --
+
+2025-10-24
 ==========
 Type      AQI       Category  Description
 ----      ---       --------  -----------
 O3        26        1         Good
 PM2.5     33        1         Good
-PM10      10        1         Good
-NO2       23        1         Good
-CO        6         1         Good
 
-2019-03-08 
+2025-10-25
 ==========
 O3        23        1         Good
 PM2.5     21        1         Good
-PM10      9         1         Good
-NO2       23        1         Good
-CO        3         1         Good
+```
+
+When forecasts are not yet available:
+```
+$ vaporwair -a
+-- AIR QUALITY FORECAST --
+
+Air quality forecasts are not yet available.
+AirNow typically publishes forecasts later in the day.
 ```
 
 ## Setup

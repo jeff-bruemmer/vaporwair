@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -64,20 +63,22 @@ func FormatCoordinates(gd GeoData) Coordinates {
 
 // GetGeoData dials the IP-API server to obtain geolocation data
 // based on user's IP address.
-func GetGeoData(addr string) GeoData {
+func GetGeoData(addr string) (GeoData, error) {
 	var gd GeoData
 	// Request coordinates from ip-api and specify timeout in seconds
 	resp, err := dialer.NetReq(addr, 5, false)
 	if err != nil {
-		fmt.Println("The geolocation service could not resolve your coordinates.")
-		os.Exit(1)
+		return gd, fmt.Errorf("geolocation service error: %w", err)
 	}
 	defer resp.Body.Close()
-	json.NewDecoder(resp.Body).Decode(&gd)
+
+	err = json.NewDecoder(resp.Body).Decode(&gd)
+	if err != nil {
+		return gd, fmt.Errorf("error decoding geolocation response: %w", err)
+	}
 
 	if gd.Status == "fail" {
-		fmt.Println("The geolocation service could not resolve your coordinates.")
-		os.Exit(1)
+		return gd, fmt.Errorf("geolocation service could not resolve coordinates")
 	}
-	return gd
+	return gd, nil
 }
