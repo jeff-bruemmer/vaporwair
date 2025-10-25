@@ -28,7 +28,7 @@ type Forecast struct {
 	Discussion    string   `json:"Discussion"`
 }
 
-const AirNowAddress = "http://www.airnowapi.org/aq/forecast/latLong/?format=application/json&"
+const AirNowAddress = "https://www.airnowapi.org/aq/forecast/latLong/?format=application/json&"
 
 // BuildAirNowURL creates http address for dialer to call Air Now API.
 func BuildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey string) string {
@@ -41,6 +41,7 @@ func BuildAirNowURL(addr string, c geolocation.Coordinates, date string, apiKey 
 }
 
 // GetForecast dials AirNow API and returns a slice of Forecasts.
+// Returns an empty slice (not nil) if no forecasts are available.
 func GetForecast(addr string) []Forecast {
 	var af []Forecast
 	resp, err := dialer.NetReq(addr, 10, false)
@@ -49,5 +50,10 @@ func GetForecast(addr string) []Forecast {
 	}
 	defer resp.Body.Close()
 	json.NewDecoder(resp.Body).Decode(&af)
+
+	// If API returns null or decode fails, return empty slice instead of nil
+	if af == nil {
+		return []Forecast{}
+	}
 	return af
 }

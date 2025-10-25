@@ -17,6 +17,4 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	AirQualityIndex(a)
 	UVIndex(w)
 	Precipitation(w)
-	Sunrise(w)
-	Sunset(w)
 }

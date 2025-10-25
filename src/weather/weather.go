@@ -319,6 +319,17 @@ func convertNOAADailyPeriodsToDataBlock(periods []NOAAPeriod) DataBlock {
 	for i := 0; i < len(periods); i += 2 {
 		var dp DataPoint
 		dayPeriod := periods[i]
+		var nightPeriod NOAAPeriod
+		hasNightPeriod := i+1 < len(periods)
+		if hasNightPeriod {
+			nightPeriod = periods[i+1]
+		}
+
+		// Determine which period is day and which is night based on IsDaytime flag
+		if !dayPeriod.IsDaytime {
+			// First period is actually night, swap them
+			dayPeriod, nightPeriod = nightPeriod, dayPeriod
+		}
 
 		// Parse time
 		t, _ := time.Parse(time.RFC3339, dayPeriod.StartTime)
@@ -326,12 +337,9 @@ func convertNOAADailyPeriodsToDataBlock(periods []NOAAPeriod) DataBlock {
 		dp.Summary = dayPeriod.ShortForecast
 		dp.Icon = mapNOAAIconToIcon(dayPeriod.ShortForecast)
 
-		// Set temperature max from day period
+		// Set temperature max from day period, min from night period
 		dp.TemperatureMax = float64(dayPeriod.Temperature)
-
-		// Set temperature min from night period if available
-		if i+1 < len(periods) {
-			nightPeriod := periods[i+1]
+		if hasNightPeriod {
 			dp.TemperatureMin = float64(nightPeriod.Temperature)
 		}
 
@@ -395,14 +403,17 @@ func celsiusToFahrenheit(c float64) float64 {
 
 func mapNOAAIconToIcon(shortForecast string) string {
 	// Map NOAA forecast descriptions to icon names
+	// Note: Order matters - check more specific patterns first
 	forecast := shortForecast
 	switch {
-	case contains(forecast, "Sunny"), contains(forecast, "Clear"):
-		return "clear-day"
 	case contains(forecast, "Partly Cloudy"), contains(forecast, "Partly Sunny"):
 		return "partly-cloudy-day"
-	case contains(forecast, "Mostly Cloudy"), contains(forecast, "Cloudy"):
+	case contains(forecast, "Mostly Cloudy"):
 		return "cloudy"
+	case contains(forecast, "Cloudy"):
+		return "cloudy"
+	case contains(forecast, "Sunny"), contains(forecast, "Clear"):
+		return "clear-day"
 	case contains(forecast, "Rain"), contains(forecast, "Showers"):
 		return "rain"
 	case contains(forecast, "Snow"):

@@ -138,6 +138,10 @@ func GetConfig(filepath string) Config {
 		log.Fatal("\nThe config file:\n", filepath, "\ndoes not contain valid JSON.")
 	}
 	json.Unmarshal(bytes, &config)
+
+	// Trim whitespace from API key
+	config.AirNowAPIKey = strings.TrimSpace(config.AirNowAPIKey)
+
 	return config
 }
 

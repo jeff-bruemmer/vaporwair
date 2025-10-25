@@ -50,7 +50,7 @@ func Spinner(t time.Time) time.Time {
 		// Set the interval to add another =.
 		time.Sleep(100 * time.Millisecond)
 		meter = strings.Replace(meter, "> ", "=>", 1)
-		fmt.Printf(meter)
+		fmt.Print(meter)
 		// Loop spinner if it completes before the reports have returned
 		if i == len(meterInit)-1 {
 			log.Fatal("There was a problem getting your forecast. Please check your internet connection.")
@@ -97,10 +97,9 @@ func PrintSpaceTime(t, t1 time.Time, c geolocation.Coordinates) {
 }
 
 func RunReportsForFirstTime(c geolocation.Coordinates, t time.Time) (weather.Forecast, []air.Forecast) {
-	// build AirNowURL
-	anURL := air.BuildAirNowURL(air.AirNowAddress, c, t.Format("2006-01-02"), config.AirNowAPIKey)
 	weatherChan := make(chan weather.Forecast)
 	airChan := make(chan []air.Forecast)
+
 	go func() {
 		forecast, err := weather.GetNOAAWeatherForecast(c)
 		if err != nil {
@@ -108,9 +107,17 @@ func RunReportsForFirstTime(c geolocation.Coordinates, t time.Time) (weather.For
 		}
 		weatherChan <- forecast
 	}()
+
+	// Only fetch air quality if API key is present
 	go func() {
-		airChan <- air.GetForecast(anURL)
+		if config.AirNowAPIKey != "" {
+			anURL := air.BuildAirNowURL(air.AirNowAddress, c, t.Format("2006-01-02"), config.AirNowAPIKey)
+			airChan <- air.GetForecast(anURL)
+		} else {
+			airChan <- []air.Forecast{}
+		}
 	}()
+
 	// Wait for API calls to return and run reports.
 	weatherForecast = <-weatherChan
 	close(weatherChan)
@@ -219,6 +226,14 @@ func main() {
 	// Load API keys
 	config = storage.GetConfig(cf)
 
+	// Validate that AirNow API key is present
+	if config.AirNowAPIKey == "" {
+		fmt.Println("Warning: AirNow API key is missing.")
+		fmt.Println("Air quality data will not be available.")
+		fmt.Println("To add your API key, edit: " + cf)
+		fmt.Println("Get a free API key at: https://docs.airnowapi.org/account/request/")
+	}
+
 	// Channels to store calls with newly confirmed coordinates
 	airChan := make(chan []air.Forecast)
 	weatherChan := make(chan weather.Forecast)
@@ -262,7 +277,6 @@ func main() {
 	// While waiting for the coordinates to return form the IP-API,
 	// assume user has not changed coordinates since last weather check
 	// and make optimistic call to APIs using saved coordinates.
-	oanURL := air.BuildAirNowURL(air.AirNowAddress, pc.Coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
 
 	// optimistic channels
 	ow := make(chan weather.Forecast)
@@ -276,7 +290,12 @@ func main() {
 		ow <- forecast
 	}()
 	go func() {
-		oa <- air.GetForecast(oanURL)
+		if config.AirNowAPIKey != "" {
+			oanURL := air.BuildAirNowURL(air.AirNowAddress, pc.Coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
+			oa <- air.GetForecast(oanURL)
+		} else {
+			oa <- []air.Forecast{}
+		}
 	}()
 
 	// Get geolocation data from channel and extract coordinates.
@@ -294,9 +313,6 @@ func main() {
 		// If coordinates returned by IP-API call differ from coordinates in saved forecast,
 		// user is in a new location, and calls with the updated coordinates need to be made.
 
-		// Build URLs.
-		anURL := air.BuildAirNowURL(air.AirNowAddress, coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
-
 		// Asynchronously make calls to NOAA and Airnow with confirmed coordinates
 		go func() {
 			forecast, err := weather.GetNOAAWeatherForecast(coordinates)
@@ -306,7 +322,12 @@ func main() {
 			weatherChan <- forecast
 		}()
 		go func() {
-			airChan <- air.GetForecast(anURL)
+			if config.AirNowAPIKey != "" {
+				anURL := air.BuildAirNowURL(air.AirNowAddress, coordinates, t.Format("2006-01-02"), config.AirNowAPIKey)
+				airChan <- air.GetForecast(anURL)
+			} else {
+				airChan <- []air.Forecast{}
+			}
 		}()
 
 		// Wait for forecasts to return, then clean up, print reports, save forecasts, and return.

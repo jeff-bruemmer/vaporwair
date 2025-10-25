@@ -5,6 +5,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 	"os"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -50,7 +51,7 @@ func Title(t string) string {
 // Adds space padding
 func Pad(v int) string {
 	fmt.Println("v", v)
-	s := string(v)
+	s := strconv.Itoa(v)
 	fmt.Println(s)
 	var b []string
 	for i := len(s); i < 4; i++ {
@@ -91,13 +92,12 @@ func LimitData(d []weather.DataPoint, l int) []weather.DataPoint {
 
 // Format 1
 func MinTemp(f weather.Forecast) {
-	fmt.Fprintf(TW, f1, "Min Temperature", Round(f.Daily.Data[0].TemperatureMin), tu, FormatTime(f.Daily.Data[0].TemperatureMinTime), hm)
+	fmt.Fprintf(TW, f2, "Min Temperature", Round(f.Daily.Data[0].TemperatureMin), tu)
 }
 
 // Prints maximum daily temperature and time.
 func MaxTemp(f weather.Forecast) {
-	fmt.Fprintf(TW, f1, "Max Temperature", f.Daily.Data[0].TemperatureMax, tu, FormatTime(f.Daily.Data[0].TemperatureMaxTime), hm)
-
+	fmt.Fprintf(TW, f2, "Max Temperature", f.Daily.Data[0].TemperatureMax, tu)
 }
 
 // Format 2
@@ -108,7 +108,7 @@ func CurrentTemp(f weather.Forecast) {
 
 // Prints humidity converted to percent.
 func Humidity(f weather.Forecast) {
-	fmt.Fprintf(TW, f2, "Humidity", ToPercent(f.Daily.Data[0].Humidity), pc)
+	fmt.Fprintf(TW, f2, "Humidity", ToPercent(f.Currently.Humidity), pc)
 }
 
 // Prints the windspeed average for the day.
@@ -157,14 +157,25 @@ func Sunset(f weather.Forecast) {
 // AirQualityIndex takes a forecast and lists the highest AQI index
 // and its particle type and category.
 func AirQualityIndex(f []air.Forecast) {
+	// Check if air forecast data is available
+	if len(f) == 0 {
+		fmt.Fprintf(TW, f4, "Air Quality Index", "N/A", "No data", "unavailable")
+		return
+	}
+
 	today := f[0].DateForecast
-	var aqi int
+	aqi := -1 // Initialize to -1 to detect if we found any valid AQI values
 	var particle string
 	var category string
 	for _, measurement := range f {
 		// We are only interested in the highest AQI for today.
 		if measurement.DateForecast != today {
 			break
+		}
+
+		// Skip measurements with invalid AQI values (AirNow returns -1 for unavailable forecasts)
+		if measurement.AQI < 0 {
+			continue
 		}
 
 		// If that measurement exceeds that of the other reigning particle,
@@ -175,6 +186,13 @@ func AirQualityIndex(f []air.Forecast) {
 			category = measurement.Category.Name
 		}
 	}
+
+	// If no valid AQI found, display appropriate message
+	if aqi < 0 {
+		fmt.Fprintf(TW, f4, "Air Quality Index", "N/A", "Forecast", "not yet available")
+		return
+	}
+
 	fmt.Fprintf(TW, f4, "Air Quality Index", aqi, particle, category)
 }
 
