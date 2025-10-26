@@ -198,7 +198,7 @@ func GetClothingRecommendationWithAir(f weather.Forecast, a []air.Forecast) Clot
 func ClothingSummary(w weather.Forecast, a []air.Forecast) {
 	rec := GetClothingRecommendationWithAir(w, a)
 
-	fmt.Println(Title("What to Wear"))
+	fmt.Println(Title("What to Wair"))
 
 	// Base outfit
 	fmt.Fprintf(TW, "Outfit:\t%s\n", rec.Outfit)
@@ -229,9 +229,9 @@ func ClothingSummary(w weather.Forecast, a []air.Forecast) {
 	}
 }
 
-// ClothingReport prints a "What to Wear" (wair) recommendation report.
+// ClothingReport prints a "What to Wair" recommendation report.
 func ClothingReport(w weather.Forecast, a []air.Forecast) {
-	fmt.Println(Title("What to Wear Today"))
+	fmt.Println(Title("What to Wair Today"))
 	fmt.Println()
 
 	rec := GetClothingRecommendationWithAir(w, a)

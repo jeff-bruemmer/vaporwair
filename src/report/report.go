@@ -1,6 +1,7 @@
 package report
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
@@ -35,6 +36,9 @@ var Separator = "+++"
 
 var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags)
 
+// HeadingWidth is set dynamically based on content width
+var HeadingWidth = 75
+
 // Format strings for tabwriter output
 var formatValueWithTime = "%s:\t%.0f %s at %v %s\n"      // e.g., "Min Temperature: 33 °F at 19:00 HH:MM"
 var formatValueWithUnit = "%s:\t%.0f %s\n"               // e.g., "Humidity: 83 %"
@@ -45,7 +49,52 @@ var formatNumber = "%s:\t%v\n"                           // e.g., "UV Index: 0"
 
 // Adds title frame
 func Title(t string) string {
-	return "-- " + strings.ToUpper(t) + " --"
+	title := "== " + strings.ToUpper(t) + " "
+
+	// Calculate remaining space and fill with =
+	remaining := HeadingWidth - len(title)
+	if remaining > 0 {
+		title += strings.Repeat("=", remaining)
+	} else {
+		title += "=="
+	}
+
+	return title
+}
+
+// MeasureMaxLineWidth measures the maximum line width of formatted output
+func MeasureMaxLineWidth(content string) int {
+	maxWidth := 0
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		// Remove ANSI codes if any and measure visible characters
+		visibleLen := len(line)
+		if visibleLen > maxWidth {
+			maxWidth = visibleLen
+		}
+	}
+	return maxWidth
+}
+
+// SetHeadingWidthFromContent generates content to a buffer, measures it, and sets HeadingWidth
+func SetHeadingWidthFromContent(contentGenerator func(*tabwriter.Writer)) {
+	// Create a buffer to capture output
+	var buf bytes.Buffer
+	tempTW := tabwriter.NewWriter(&buf, minwidth, tabwidth, padding, padchar, flags)
+
+	// Generate content to buffer
+	contentGenerator(tempTW)
+	tempTW.Flush()
+
+	// Measure max line width
+	maxWidth := MeasureMaxLineWidth(buf.String())
+
+	// Set heading width (with a minimum of 60)
+	if maxWidth < 60 {
+		HeadingWidth = 60
+	} else {
+		HeadingWidth = maxWidth
+	}
 }
 
 // Pad adds leading spaces to align numbers to 4 characters width.

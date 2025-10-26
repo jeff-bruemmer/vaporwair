@@ -23,6 +23,7 @@ var insightsReport bool
 var summaryReport bool
 var zipCode string
 var useCurrentLocation bool
+var refresh bool
 
 // isValid checks if a cached forecast is still fresh based on elapsed time.
 // This implements optimistic caching: we assume forecasts don't change frequently,
@@ -31,35 +32,40 @@ func isValid(t time.Time, timeout float64) bool {
 	return time.Since(t).Minutes() < timeout
 }
 
-// Spinner creates a basic loading bar with zero connection to reality.
+// Spinner creates a randomly populated loading bar with zero connection to reality.
 // Its purpose is to show the user the program is running.
 // It listens on the done channel and stops when signaled.
 // Returns the original timestamp via the result channel.
 func Spinner(startTime time.Time, done chan bool, result chan time.Time) {
-	meterInit := "\r[=>                                               ]"
-	meter := meterInit
+	const barWidth = 75
 	maxIterations := 600 // 60 seconds timeout (600 * 100ms)
 
 	for i := 0; i <= maxIterations; i++ {
 		select {
 		case <-done:
 			// Clear the line and exit
-			fmt.Printf("\r                                                      ")
+			fmt.Printf("\r%s\r", strings.Repeat(" ", barWidth+2))
 			result <- startTime
 			return
 		default:
-			// Set the interval to add another =.
 			time.Sleep(100 * time.Millisecond)
 
-			// Update progress bar (loop it if necessary)
-			if i < len(meterInit)-1 {
-				meter = strings.Replace(meter, "> ", "=>", 1)
+			// Build the spinner bar with random population
+			bar := make([]rune, barWidth)
+			for j := 0; j < barWidth; j++ {
+				// Randomly populate approximately 30% of the bar
+				if time.Now().UnixNano()%(int64(j+1)*3) == 0 {
+					bar[j] = '█'
+				} else {
+					bar[j] = ' '
+				}
 			}
-			fmt.Print(meter)
+
+			fmt.Printf("\r[%s]", string(bar))
 
 			// Timeout after max iterations
 			if i == maxIterations {
-				fmt.Printf("\r                                                      ")
+				fmt.Printf("\r%s\r", strings.Repeat(" ", barWidth+2))
 				log.Fatal("Request timed out after 60 seconds. The weather service may be unavailable.")
 			}
 		}
@@ -196,6 +202,7 @@ func init() {
 	flag.BoolVar(&summaryReport, "s", false, "Prints summary report with current conditions.")
 	flag.StringVar(&zipCode, "zip", "", "Get weather for a specific US zip code (e.g., -zip=10001).")
 	flag.BoolVar(&useCurrentLocation, "current", false, "Use current IP-based location (temporary override).")
+	flag.BoolVar(&refresh, "refresh", false, "Force fresh API call, bypassing cache.")
 }
 
 // setupConfiguration initializes the configuration directory and loads API keys.
@@ -265,11 +272,16 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 //   1. Time-based: Cache expires after CacheTimeoutMinutes (default: 5 minutes)
 //   2. Location-based: Cache is tied to coordinates from last API call
 //   3. Existence-based: Missing cache files trigger a fresh API call
-//   4. Override flags: When -zip or -current flags are used, ignore cache
+//   4. Override flags: When -zip, -current, or -refresh flags are used, ignore cache
 //   5. Default zip: When default zip code is set, ignore IP-based cache
 //
 // This optimistic approach prioritizes speed over freshness for recent queries.
 func loadCachedForecasts(appConfig storage.AppConfig, t time.Time, spinnerDone chan bool, spinnerResult chan time.Time) bool {
+	// Skip cache if user requested a forced refresh
+	if refresh {
+		return false
+	}
+
 	// Skip cache if user specified a zip code via flag (they want a specific location)
 	if zipCode != "" {
 		return false
