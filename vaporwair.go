@@ -324,7 +324,6 @@ func loadCachedForecasts(appConfig storage.AppConfig, t time.Time, spinnerDone c
 	// Stop spinner and print results
 	spinnerDone <- true
 	t1 := <-spinnerResult
-	PrintBanner()
 	PrintSpaceTime(t, t1, pc.Coordinates)
 	RunReports(pwf, paf)
 	report.TW.Flush()
@@ -367,7 +366,6 @@ func main() {
 	// Stop spinner and display results
 	spinnerDone <- true
 	t1 := <-spinnerResult
-	PrintBanner()
 	PrintSpaceTime(t, t1, coordinates)
 	RunReports(wf, af)
 	report.TW.Flush()
