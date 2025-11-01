@@ -59,27 +59,27 @@ Tip:        Wind chill factor - dress warmer than temperature suggests
 
 ### Hourly weather (`-h`)
 
-Hour-by-hour forecast for the next 12 hours, including temperature, precipitation, **cloud cover**, wind, and gusts.
+Hour-by-hour forecast for the next 12 hours, including temperature, precipitation, wind, and gusts.
 
 ```
 $ vaporwair -h
 -- HOURLY SUMMARY --
 Partly cloudy until tomorrow afternoon.
 
-Hour   Temp    Precip  Clouds  Wind    Gust
-----   ----    ------  ------  ----    ----
-16:00  61 °F   0 %     50 %    6 mph   -
-17:00  59 °F   0 %     65 %    5 mph   -
-18:00  57 °F   0 %     75 %    5 mph   8 mph
-19:00  55 °F   8 %     75 %    6 mph   -
-20:00  54 °F   5 %     80 %    7 mph   -
-21:00  53 °F   7 %     85 %    6 mph   -
-22:00  52 °F   10 %    90 %    5 mph   -
-23:00  51 °F   12 %    95 %    6 mph   -
-00:00  51 °F   11 %    100 %   6 mph   -
-01:00  50 °F   10 %    100 %   7 mph   -
-02:00  50 °F   12 %    95 %    6 mph   -
-03:00  50 °F   6 %     85 %    6 mph   -
+Hour   Temp    Precip  Wind    Gust
+----   ----    ------  ----    ----
+16:00  61 °F   0 %     6 mph   -
+17:00  59 °F   0 %     5 mph   -
+18:00  57 °F   0 %     5 mph   8 mph
+19:00  55 °F   8 %     6 mph   -
+20:00  54 °F   5 %     7 mph   -
+21:00  53 °F   7 %     6 mph   -
+22:00  52 °F   10 %    5 mph   -
+23:00  51 °F   12 %    6 mph   -
+00:00  51 °F   11 %    6 mph   -
+01:00  50 °F   10 %    7 mph   -
+02:00  50 °F   12 %    6 mph   -
+03:00  50 °F   6 %     6 mph   -
 ```
 
 ### Weekly weather (`-w`)

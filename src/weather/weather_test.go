@@ -587,30 +587,6 @@ func TestSunriseSunsetExtraction(t *testing.T) {
 	}
 }
 
-func TestCloudCoverExtraction(t *testing.T) {
-	tests := []struct {
-		forecast      string
-		expectedCover float64
-	}{
-		{"Sunny", 0.0},
-		{"Clear", 0.0},
-		{"Mostly Sunny", 0.25},
-		{"Partly Cloudy", 0.50},
-		{"Partly Sunny", 0.50},
-		{"Mostly Cloudy", 0.75},
-		{"Cloudy", 1.0},
-		{"Overcast", 1.0},
-	}
-
-	for _, test := range tests {
-		result := estimateCloudCover(test.forecast)
-		if result != test.expectedCover {
-			t.Errorf("estimateCloudCover(%q) = %.2f, expected %.2f",
-				test.forecast, result, test.expectedCover)
-		}
-	}
-}
-
 func TestPrecipitationTypeInDataPoint(t *testing.T) {
 	// Test that precipitation type is properly extracted and stored
 	precipProb := 80.0
@@ -678,34 +654,6 @@ func TestApparentTemperatureInConversion(t *testing.T) {
 	// Verify it's not zero (which would indicate it wasn't calculated)
 	if dp.ApparentTemperature == 0 {
 		t.Error("Apparent temperature should not be zero when conditions are available")
-	}
-}
-
-func TestCloudCoverInDataPoint(t *testing.T) {
-	precipProb := 10.0
-	dewpoint := 10.0
-	humidity := 60.0
-
-	period := NOAAPeriod{
-		Number:                     1,
-		Name:                       "Today",
-		StartTime:                  "2025-10-24T12:00:00-04:00",
-		Temperature:                70,
-		WindSpeed:                  "10 mph",
-		WindDirection:              "W",
-		ShortForecast:              "Mostly Cloudy",
-		ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
-		Dewpoint:                   NOAAValue{Value: &dewpoint},
-		RelativeHumidity:           NOAAValue{Value: &humidity},
-	}
-
-	dp := convertNOAAPeriodToDataPoint(period)
-
-	// "Mostly Cloudy" should give 75% cloud cover
-	expectedCover := 0.75
-	if dp.CloudCover != expectedCover {
-		t.Errorf("Expected cloud cover %.2f for 'Mostly Cloudy', got %.2f",
-			expectedCover, dp.CloudCover)
 	}
 }
 

@@ -5,18 +5,19 @@ package weather
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jeff-bruemmer/vaporwair/src/dialer"
-	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 	"math"
 	"strings"
 	"time"
+
+	"github.com/jeff-bruemmer/vaporwair/src/dialer"
+	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 )
 
 // DataPoint represents a weather data point for a specific time.
 // Fields are populated from NOAA National Weather Service API data.
 type DataPoint struct {
 	Time                float64 `json:"time"`
-	PeriodName          string  `json:"periodName"`          // Human-readable period label: "This Afternoon", "Tonight", "Monday", etc.
+	PeriodName          string  `json:"periodName"` // Human-readable period label: "This Afternoon", "Tonight", "Monday", etc.
 	Summary             string  `json:"summary"`
 	Icon                string  `json:"icon"`
 	PrecipProbability   float64 `json:"precipProbability"`
@@ -24,17 +25,15 @@ type DataPoint struct {
 	Temperature         float64 `json:"temperature"`
 	TemperatureMin      float64 `json:"temperatureMin"`
 	TemperatureMax      float64 `json:"temperatureMax"`
-	TemperatureTrend    string  `json:"temperatureTrend"` // "rising", "falling", "steady"
+	TemperatureTrend    string  `json:"temperatureTrend"`    // "rising", "falling", "steady"
 	ApparentTemperature float64 `json:"apparentTemperature"` // Heat index or wind chill
 	DewPoint            float64 `json:"dewPoint"`
 	WindSpeed           float64 `json:"windSpeed"`
 	WindGust            float64 `json:"windGust"`
 	WindBearing         float64 `json:"windBearing"` // Degrees (0-360)
-	CloudCover          float64 `json:"cloudCover"`  // 0.0 to 1.0
 	Humidity            float64 `json:"humidity"`    // 0.0 to 1.0
 	Pressure            float64 `json:"pressure"`    // Atmospheres
 	Visibility          float64 `json:"visibility"`  // Miles
-	UVIndex             float64 `json:"uvIndex"`     // NOTE: Not provided by NOAA, always 0. Would require separate EPA UV Index API.
 	DetailedForecast    string  `json:"detailedForecast"`
 }
 
@@ -113,13 +112,13 @@ type NOAAPointsResponse struct {
 }
 
 type NOAAPointsProperties struct {
-	GridID               string               `json:"gridId"`
-	GridX                int                  `json:"gridX"`
-	GridY                int                  `json:"gridY"`
-	Forecast             string               `json:"forecast"`
-	ForecastHourly       string               `json:"forecastHourly"`
-	ObservationStations  string               `json:"observationStations"`
-	RelativeLocation     NOAARelativeLocation `json:"relativeLocation"`
+	GridID              string               `json:"gridId"`
+	GridX               int                  `json:"gridX"`
+	GridY               int                  `json:"gridY"`
+	Forecast            string               `json:"forecast"`
+	ForecastHourly      string               `json:"forecastHourly"`
+	ObservationStations string               `json:"observationStations"`
+	RelativeLocation    NOAARelativeLocation `json:"relativeLocation"`
 }
 
 type NOAARelativeLocation struct {
@@ -136,8 +135,8 @@ type NOAAForecastResponse struct {
 }
 
 type NOAAForecastProperties struct {
-	Updated  string        `json:"updated"`
-	Periods  []NOAAPeriod  `json:"periods"`
+	Updated string       `json:"updated"`
+	Periods []NOAAPeriod `json:"periods"`
 }
 
 type NOAAPeriod struct {
@@ -240,39 +239,6 @@ func extractPrecipType(forecast string) string {
 // isIconDaytime determines if NOAA icon URL represents daytime or nighttime.
 func isIconDaytime(iconURL string) bool {
 	return strings.Contains(iconURL, "/day/")
-}
-
-// estimateCloudCover estimates cloud cover percentage from forecast description.
-func estimateCloudCover(forecast string) float64 {
-	// Check more specific patterns first to avoid false matches
-	switch {
-	case strings.Contains(forecast, "Cloudy"), strings.Contains(forecast, "Overcast"):
-		// Check for "Mostly Cloudy" first
-		if strings.Contains(forecast, "Mostly Cloudy") {
-			return 0.75
-		}
-		// Check for "Partly Cloudy" next
-		if strings.Contains(forecast, "Partly Cloudy") {
-			return 0.50
-		}
-		// Just "Cloudy" or "Overcast"
-		return 1.0
-	case strings.Contains(forecast, "Sunny"):
-		// Check for "Mostly Sunny" first
-		if strings.Contains(forecast, "Mostly Sunny") {
-			return 0.25
-		}
-		// Check for "Partly Sunny" next
-		if strings.Contains(forecast, "Partly Sunny") {
-			return 0.50
-		}
-		// Just "Sunny"
-		return 0.0
-	case strings.Contains(forecast, "Clear"):
-		return 0.0
-	default:
-		return 0.50 // Default to partly cloudy
-	}
 }
 
 // GetNOAAGridPoint gets the grid coordinates for a given lat/lon from NOAA API.
@@ -441,9 +407,6 @@ func convertNOAAPeriodToDataPoint(period NOAAPeriod) DataPoint {
 		dp.Humidity,
 		dp.WindSpeed,
 	)
-
-	// Estimate cloud cover from forecast description
-	dp.CloudCover = estimateCloudCover(period.ShortForecast)
 
 	return dp
 }
