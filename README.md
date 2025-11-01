@@ -163,13 +163,6 @@ Additional Tips:
   • Moderate UV - sun protection recommended
 ```
 
-**Features:**
-
-- Temperature-based outfit recommendations (10 temperature ranges)
-- Context-aware accessories (rain gear, winter wear, sun protection, air quality masks)
-- Safety tips for extreme conditions, UV exposure, air quality, and hydration
-- Large temperature swing warnings (bring layers)
-
 ### Insights Report (`-i`)
 
 Comparative analysis and time-based planning tools for the week ahead.
@@ -207,24 +200,9 @@ Temperature timing (next 12 hours):
   Coldest: 42°F at 6:00 AM
 ```
 
-**Comparative Analysis:**
-
-- Warmest/coldest days of the week
-- Windiest day (including gusts)
-- Highest precipitation probability
-- Largest daily temperature swing
-- Automatic notable condition alerts
-
-**Time-Based Insights:**
-
-- Best outdoor window (4-hour blocks optimized for temperature, rain, wind)
-- Rain windows (periods with ≥50% precipitation)
-- High wind periods (≥20 mph threshold)
-- Temperature timing for the next 12 hours
-
 ## Setup
 
-1. Obtain a free API key from [AirNow](https://docs.airnowapi.org/) for air quality reports from the Environmental Protection Agency.
+1. (Optional) Obtain a free API key from [AirNow](https://docs.airnowapi.org/) for air quality reports from the Environmental Protection Agency.
    - Weather data is provided by NOAA's National Weather Service API and does not require an API key.
 
 2. Download and install the [Go programming language](https://golang.org/).
@@ -304,107 +282,7 @@ It then calls the NOAA National Weather Service and AirNow APIs to get location-
 ## Design constraints
 
 - Only standard Go packages (i.e. no external libraries).
-- Reports must fit in an unmaximized terminal to avoid scrolling.
 - Only one report can be run at a time.
-
-## Recent Updates
-
-### Version 2.1 (November 2025 - Enhanced Data Utilization)
-
-- **"Feels Like" Temperature** - Heat index and wind chill calculations now displayed
-- **Precipitation Type Detection** - Shows whether it's rain, snow, sleet, or mixed
-- **Cloud Cover Display** - Added to hourly reports with percentage coverage
-- **Automatic Timezone Detection** - No more hardcoded timezones, uses coordinate-based estimation
-- **Dew Point** - Added to insights report for comfort assessment
-- **Enhanced Test Coverage** - Comprehensive test suite for new features
-- **Full NOAA Data Utilization** - Now using ~95% of available NOAA API data (up from ~60%)
-
-### Version 2.0 (NOAA Migration & New Features)
-
-- **NOAA National Weather Service API** - Migrated from Dark Sky to free NOAA API
-- **Zip Code Support** - Get weather for any US location with `-zip` flag
-- **Wind Gust Data** - Added to hourly, weekly, and summary reports
-- **Temperature Trends** - Shows rising/falling temperature indicators
-- **Detailed Forecasts** - Rich narrative descriptions from NOAA
-- **Clothing Recommendations** - Smart outfit suggestions based on all weather conditions
-- **Insights Report** - Comparative weekly analysis and time-based planning tools
-- **Improved Error Handling** - Standardized error patterns throughout
-- **Optimistic Caching** - Documented 5-minute cache strategy
-- **Presentation Layer** - Abstraction between data and reports for easier maintenance
-
-## Data Sources & Limitations
-
-### What Data Is Available
-
-Vaporwair makes full use of NOAA National Weather Service API data:
-
-**Weather Data (NOAA - No API Key Required):**
-- ✅ Temperature (actual)
-- ✅ "Feels Like" Temperature (heat index/wind chill calculated from temp, humidity, wind)
-- ✅ Precipitation probability
-- ✅ Precipitation type (rain, snow, sleet, freezing rain, mix)
-- ✅ Cloud cover (estimated from forecast descriptions)
-- ✅ Wind speed and direction
-- ✅ Wind gusts
-- ✅ Humidity
-- ✅ Dew point
-- ✅ Atmospheric pressure (from observation stations)
-- ✅ Visibility (from observation stations)
-- ✅ Temperature trends (rising/falling/steady)
-- ✅ Weather alerts
-- ✅ Detailed forecast narratives
-
-**Air Quality Data (AirNow - API Key Required):**
-- ✅ AQI (Air Quality Index) for O3, PM2.5, PM10, NO2, CO
-- ✅ Category names (Good, Moderate, Unhealthy, etc.)
-- ✅ Multi-pollutant tracking
-
-**Location Services:**
-- ✅ US zip code lookup
-- ✅ IP-based geolocation
-- ✅ Automatic timezone detection (based on coordinates)
-
-### Known Limitations
-
-**Data NOT Available from NOAA API:**
-- ❌ **UV Index** - NOAA does not provide UV index data. While the code structure supports it, values are always 0.
-- ❌ **Sunrise/Sunset Times** - NOAA forecast API doesn't include precise sunrise/sunset times. Would require astronomical calculations or a separate API.
-- ❌ **Moon Phase** - Not provided by NOAA API (legacy field from previous Dark Sky integration)
-- ❌ **Ozone Levels** - Not provided by NOAA weather API (air quality ozone is available via AirNow)
-- ❌ **Minutely Forecast** - NOAA provides hourly forecasts, not minute-by-minute predictions
-
-**Geographic Limitations:**
-- 📍 **US-only coverage** - NOAA API only covers United States territories
-- 📍 **Timezone estimation** - Uses longitude-based approximation for US timezones (may be slightly inaccurate near timezone boundaries)
-
-**Temporal Limitations:**
-- ⏰ **Hourly forecast** - Up to 7 days ahead (156 hours)
-- ⏰ **Daily forecast** - Up to 7 days ahead
-- ⏰ **Cache TTL** - 5-minute default (configurable)
-
-### Why Some Fields Are Zero
-
-If you see these values as zero, they are expected limitations:
-- **UV Index: 0** - NOAA doesn't provide this (consider integrating EPA UV Index API)
-- **Moon Phase: 0** - Not available from NOAA
-- **Ozone: 0** - Weather ozone not in NOAA API (air quality O3 available via AirNow)
-
-### Data Accuracy Notes
-
-- **Cloud Cover** - Estimated from NOAA's text descriptions (Sunny=0%, Partly Cloudy=50%, Overcast=100%)
-- **"Feels Like" Temperature** - Calculated using standard heat index (temp ≥80°F) and wind chill (temp ≤50°F) formulas
-- **Precipitation Type** - Extracted from NOAA forecast text (e.g., "Light Snow" → "snow")
-- **Timezone** - Estimated from longitude for US locations (±1 hour accuracy near boundaries)
-
-## Roadmap
-
-- Add flag to re-enter API keys
-- Support for international units (metric)
-- UV Index integration (EPA or separate API)
-- Sunrise/sunset calculations (astronomical formulas or API)
-- Additional activity recommendations (outdoor sports, gardening, etc.)
-- Historical weather comparisons
-- Improved timezone detection (full timezone database)
 
 ## License
 

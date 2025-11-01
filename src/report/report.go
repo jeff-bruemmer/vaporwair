@@ -282,11 +282,6 @@ func WeeklySummary(f weather.Forecast) {
 	fmt.Fprintf(TW, formatString, "This week", AddPeriod(f.Daily.Summary))
 }
 
-// Prints the UV index
-func UVIndex(f weather.Forecast) {
-	fmt.Fprintf(TW, formatNumber, "UV Index", f.Currently.UVIndex)
-}
-
 // WeatherAlerts prints active weather alerts if any exist.
 func WeatherAlerts(f weather.Forecast) {
 	if len(f.Alerts) == 0 {

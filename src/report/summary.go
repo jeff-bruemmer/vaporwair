@@ -21,7 +21,6 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	Pressure(w)
 	Visibility(w)
 	AirQualityIndex(a)
-	UVIndex(w)
 	Precipitation(w)
 	TW.Flush()
 

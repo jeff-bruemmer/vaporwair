@@ -117,16 +117,6 @@ func GetClothingRecommendation(f weather.Forecast) ClothingRecommendation {
 		rec.Notes = append(rec.Notes, "Choose moisture-wicking fabrics")
 	}
 
-	// UV Index recommendations
-	uvIndex := current.UVIndex
-	if uvIndex >= 8 {
-		rec.Notes = append(rec.Notes, "Very high UV - minimize midday sun exposure")
-	} else if uvIndex >= 6 {
-		rec.Notes = append(rec.Notes, "High UV - seek shade during midday hours")
-	} else if uvIndex >= 3 {
-		rec.Notes = append(rec.Notes, "Moderate UV - sun protection recommended")
-	}
-
 	// Air quality recommendations
 	// This is a simplified check - full implementation would use air quality data
 

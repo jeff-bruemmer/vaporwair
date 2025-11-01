@@ -28,7 +28,6 @@ type CurrentConditions struct {
 	Humidity    float64
 	WindSpeed   float64
 	Summary     string
-	UVIndex     float64
 }
 
 // GetCurrentConditions extracts and organizes current weather data.
@@ -38,7 +37,6 @@ func (vm ForecastViewModel) GetCurrentConditions() CurrentConditions {
 		Humidity:    vm.Weather.Currently.Humidity,
 		WindSpeed:   vm.Weather.Currently.WindSpeed,
 		Summary:     vm.Weather.Currently.Summary,
-		UVIndex:     vm.Weather.Currently.UVIndex,
 	}
 }
 
