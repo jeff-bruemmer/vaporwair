@@ -151,7 +151,18 @@ func MaxTemp(f weather.Forecast) {
 
 // Prints minimum daily temperature and time.
 func CurrentTemp(f weather.Forecast) {
-	fmt.Fprintf(TW, formatValueWithUnit, "Current Temperature", Round(f.Hourly.Data[0].Temperature), temperatureUnit)
+	current := f.Hourly.Data[0]
+	actual := Round(current.Temperature)
+	feelsLike := Round(current.ApparentTemperature)
+
+	// Only show "feels like" if it differs significantly from actual (>3 degrees)
+	diff := feelsLike - actual
+	if diff > 3 || diff < -3 {
+		fmt.Fprintf(TW, "Current Temperature:\t%.0f %s (feels like %.0f %s)\n",
+			actual, temperatureUnit, feelsLike, temperatureUnit)
+	} else {
+		fmt.Fprintf(TW, formatValueWithUnit, "Current Temperature", actual, temperatureUnit)
+	}
 }
 
 // Prints humidity converted to percent.
@@ -176,14 +187,17 @@ func Windspeed(f weather.Forecast) {
 	}
 }
 
-// Prints the average cloudcover as a percentage.
-func Cloudcover(f weather.Forecast) {
-	fmt.Fprintf(TW, formatValueWithUnit, "Cloudcover", ToPercent(f.Daily.Data[0].CloudCover), percentUnit)
-}
-
 // Prints precipitation probability.
 func Precipitation(f weather.Forecast) {
-	fmt.Fprintf(TW, formatValueWithUnit, "Precipitation", Round(ToPercent(f.Daily.Data[0].PrecipProbability)), percentUnit)
+	prob := Round(ToPercent(f.Daily.Data[0].PrecipProbability))
+	precipType := f.Daily.Data[0].PrecipType
+
+	if precipType != "" && prob > 0 {
+		// Capitalize using strings.Title for proper formatting
+		fmt.Fprintf(TW, "%s Probability:\t%.0f %s\n", strings.Title(precipType), prob, percentUnit)
+	} else {
+		fmt.Fprintf(TW, formatValueWithUnit, "Precipitation", prob, percentUnit)
+	}
 }
 
 // Prints the pressure in atmospheres.
@@ -191,23 +205,12 @@ func Pressure(f weather.Forecast) {
 	fmt.Fprintf(TW, formatValueWithUnit, "Pressure", f.Daily.Data[0].Pressure, pressureUnit)
 }
 
-func Dewpoint(f weather.Forecast) {
-	fmt.Fprintf(TW, formatValueWithUnit, "Dewpoint", f.Daily.Data[0].DewPoint, temperatureUnit)
-}
-
 func Visibility(f weather.Forecast) {
 	fmt.Fprintf(TW, formatValueWithUnit, "Visibility", f.Daily.Data[0].Visibility, distanceUnit)
 }
 
-// Sunrise prints the time the sun rises.
-func Sunrise(f weather.Forecast) {
-	fmt.Fprintf(TW, formatLabelValue, "Sunrise", FormatTime(f.Daily.Data[0].SunriseTime), timeFormat)
-}
-
-// Sunset prints the time the sun sets.
-func Sunset(f weather.Forecast) {
-	fmt.Fprintf(TW, formatLabelValue, "Sunset", FormatTime(f.Daily.Data[0].SunsetTime), timeFormat)
-}
+// Note: Sunrise/Sunset times are not available from NOAA forecast API.
+// Would require astronomical calculations or integration with a separate API like sunrise-sunset.org
 
 // AirQualityIndex takes a forecast and lists the highest AQI index
 // and its particle type and category.

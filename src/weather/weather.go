@@ -7,50 +7,35 @@ import (
 	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
+	"math"
+	"strings"
 	"time"
 )
 
-type Flags struct {
-	ISDStations  []string `json:"isds-stations"`
-	LAMPStations []string `json:"lamp-stations"`
-	METARStations []string `json:"metars-stations"`
-	METNOLicense string   `json:"metnol-license"`
-	Sources      []string `json:"sources"`
-	Units        string   `json:"units"`
-}
-
+// DataPoint represents a weather data point for a specific time.
+// Fields are populated from NOAA National Weather Service API data.
 type DataPoint struct {
-	Time                   float64 `json:"time"`
-	Summary                string  `json:"summary"`
-	Icon                   string  `json:"icon"`
-	SunriseTime            float64 `json:"sunriseTime"`
-	SunsetTime             float64 `json:"sunsetTime"`
-	PrecipIntensity        float64 `json:"precipIntensity"`
-	PrecipIntensityMax     float64 `json:"precipIntensityMax"`
-	PrecipIntensityMaxTime float64 `json:"precipIntensityMaxTime"`
-	PrecipProbability      float64 `json:"precipProbability"`
-	PrecipType             string  `json:"precipType"`
-	PrecipAccumulation     float64 `json:"precipAccumulation"`
-	Temperature            float64 `json:"temperature"`
-	TemperatureMin         float64 `json:"temperatureMin"`
-	TemperatureMinTime     float64 `json:"temperatureMinTime"`
-	TemperatureMax         float64 `json:"temperatureMax"`
-	TemperatureMaxTime     float64 `json:"temperatureMaxTime"`
-	TemperatureTrend       string  `json:"temperatureTrend"`
-	ApparentTemperature    float64 `json:"apparentTemperature"`
-	DewPoint               float64 `json:"dewPoint"`
-	WindSpeed              float64 `json:"windSpeed"`
-	WindGust               float64 `json:"windGust"`
-	WindBearing            float64 `json:"windBearing"`
-	CloudCover             float64 `json:"cloudCover"`
-	Humidity               float64 `json:"humidity"`
-	Pressure               float64 `json:"pressure"`
-	Visibility             float64 `json:"visibility"`
-	Ozone                  float64 `json:"ozone"`
-	MoonPhase              float64 `json:"moonPhase"`
-	UVIndex                float64 `json:"uvIndex"`
-	UVIndexTime            float64 `json:"uvIndexTime"`
-	DetailedForecast       string  `json:"detailedForecast"`
+	Time                float64 `json:"time"`
+	PeriodName          string  `json:"periodName"`          // Human-readable period label: "This Afternoon", "Tonight", "Monday", etc.
+	Summary             string  `json:"summary"`
+	Icon                string  `json:"icon"`
+	PrecipProbability   float64 `json:"precipProbability"`
+	PrecipType          string  `json:"precipType"`
+	Temperature         float64 `json:"temperature"`
+	TemperatureMin      float64 `json:"temperatureMin"`
+	TemperatureMax      float64 `json:"temperatureMax"`
+	TemperatureTrend    string  `json:"temperatureTrend"` // "rising", "falling", "steady"
+	ApparentTemperature float64 `json:"apparentTemperature"` // Heat index or wind chill
+	DewPoint            float64 `json:"dewPoint"`
+	WindSpeed           float64 `json:"windSpeed"`
+	WindGust            float64 `json:"windGust"`
+	WindBearing         float64 `json:"windBearing"` // Degrees (0-360)
+	CloudCover          float64 `json:"cloudCover"`  // 0.0 to 1.0
+	Humidity            float64 `json:"humidity"`    // 0.0 to 1.0
+	Pressure            float64 `json:"pressure"`    // Atmospheres
+	Visibility          float64 `json:"visibility"`  // Miles
+	UVIndex             float64 `json:"uvIndex"`     // NOTE: Not provided by NOAA, always 0. Would require separate EPA UV Index API.
+	DetailedForecast    string  `json:"detailedForecast"`
 }
 
 type DataBlock struct {
@@ -67,19 +52,16 @@ type Alert struct {
 	URI         string  `json:"uri"`
 }
 
+// Forecast represents a complete weather forecast with current conditions,
+// hourly and daily data, and any active weather alerts.
 type Forecast struct {
 	Latitude  float64   `json:"latitude"`
 	Longitude float64   `json:"longitude"`
 	Timezone  string    `json:"timezone"`
-	Offset    float64   `json:"offset"`
 	Currently DataPoint `json:"currently"`
-	Minutely  DataBlock `json:"minutely"`
 	Hourly    DataBlock `json:"hourly"`
 	Daily     DataBlock `json:"daily"`
 	Alerts    []Alert   `json:"alerts"`
-	Flags     Flags     `json:"flags"`
-	APICalls  int       `json:"apicalls"`
-	Code      int       `json:"code"`
 }
 
 // NOAA API constants
@@ -183,6 +165,116 @@ type NOAAValue struct {
 	Value    *float64 `json:"value"` // Pointer to handle null values
 }
 
+// calculateApparentTemperature calculates "feels like" temperature based on conditions.
+// Uses heat index for hot conditions and wind chill for cold conditions.
+func calculateApparentTemperature(temp, humidity, windSpeed float64) float64 {
+	// For temperatures above 80°F with humidity, use heat index
+	if temp >= 80 {
+		// Simplified heat index formula
+		hi := -42.379 +
+			2.04901523*temp +
+			10.14333127*humidity*100 -
+			0.22475541*temp*humidity*100 -
+			0.00683783*temp*temp -
+			0.05481717*(humidity*100)*(humidity*100) +
+			0.00122874*temp*temp*(humidity*100) +
+			0.00085282*temp*(humidity*100)*(humidity*100) -
+			0.00000199*temp*temp*(humidity*100)*(humidity*100)
+
+		// If conditions don't warrant heat index, just return temp
+		if humidity < 0.40 {
+			return temp
+		}
+		return hi
+	}
+
+	// For temperatures below 50°F with wind, use wind chill
+	if temp <= 50 && windSpeed > 3 {
+		// Wind chill formula (valid for temps ≤ 50°F and wind speeds > 3 mph)
+		// Uses NWS formula: WC = 35.74 + 0.6215*T - 35.75*(V^0.16) + 0.4275*T*(V^0.16)
+		// where T is temperature in °F and V is wind speed in mph
+		windPower := math.Pow(windSpeed, 0.16)
+		windChill := 35.74 +
+			0.6215*temp -
+			35.75*windPower +
+			0.4275*temp*windPower
+		return windChill
+	}
+
+	// For moderate conditions, return actual temperature
+	return temp
+}
+
+// extractPrecipType determines precipitation type from forecast description.
+func extractPrecipType(forecast string) string {
+	lowerForecast := strings.ToLower(forecast)
+
+	// Check for mixed precipitation first
+	if strings.Contains(lowerForecast, "rain") && strings.Contains(lowerForecast, "snow") {
+		return "rain/snow"
+	}
+	if strings.Contains(lowerForecast, "wintry mix") {
+		return "mix"
+	}
+
+	// Check specific types (most specific first)
+	if strings.Contains(lowerForecast, "freezing rain") {
+		return "freezing rain"
+	}
+	if strings.Contains(lowerForecast, "sleet") || strings.Contains(lowerForecast, "ice pellets") {
+		return "sleet"
+	}
+	if strings.Contains(lowerForecast, "hail") {
+		return "sleet"
+	}
+	if strings.Contains(lowerForecast, "snow") || strings.Contains(lowerForecast, "flurries") {
+		return "snow"
+	}
+	if strings.Contains(lowerForecast, "rain") || strings.Contains(lowerForecast, "showers") || strings.Contains(lowerForecast, "drizzle") {
+		return "rain"
+	}
+
+	return ""
+}
+
+// isIconDaytime determines if NOAA icon URL represents daytime or nighttime.
+func isIconDaytime(iconURL string) bool {
+	return strings.Contains(iconURL, "/day/")
+}
+
+// estimateCloudCover estimates cloud cover percentage from forecast description.
+func estimateCloudCover(forecast string) float64 {
+	// Check more specific patterns first to avoid false matches
+	switch {
+	case strings.Contains(forecast, "Cloudy"), strings.Contains(forecast, "Overcast"):
+		// Check for "Mostly Cloudy" first
+		if strings.Contains(forecast, "Mostly Cloudy") {
+			return 0.75
+		}
+		// Check for "Partly Cloudy" next
+		if strings.Contains(forecast, "Partly Cloudy") {
+			return 0.50
+		}
+		// Just "Cloudy" or "Overcast"
+		return 1.0
+	case strings.Contains(forecast, "Sunny"):
+		// Check for "Mostly Sunny" first
+		if strings.Contains(forecast, "Mostly Sunny") {
+			return 0.25
+		}
+		// Check for "Partly Sunny" next
+		if strings.Contains(forecast, "Partly Sunny") {
+			return 0.50
+		}
+		// Just "Sunny"
+		return 0.0
+	case strings.Contains(forecast, "Clear"):
+		return 0.0
+	default:
+		return 0.50 // Default to partly cloudy
+	}
+}
+
 // GetNOAAGridPoint gets the grid coordinates for a given lat/lon from NOAA API.
 func GetNOAAGridPoint(c geolocation.Coordinates) (NOAAPointsResponse, error) {
 	var points NOAAPointsResponse
@@ -247,13 +339,43 @@ func GetNOAAForecast(forecastURL string) (NOAAForecastResponse, error) {
 	return forecast, nil
 }
 
+// getTimezoneFromCoordinates estimates timezone based on longitude for US locations.
+// This is a simplified approximation - a full implementation would use a timezone database.
+func getTimezoneFromCoordinates(lat, lon float64) string {
+	// Simple timezone estimation for continental US based on longitude
+	// Eastern: > -87.5°
+	// Central: -87.5° to -101.5°
+	// Mountain: -101.5° to -115°
+	// Pacific: < -115°
+
+	switch {
+	case lon > -87.5:
+		return "America/New_York" // Eastern
+	case lon > -101.5:
+		return "America/Chicago" // Central
+	case lon > -115:
+		return "America/Denver" // Mountain
+	case lon > -125:
+		return "America/Los_Angeles" // Pacific
+	default:
+		// Alaska, Hawaii, or outside continental US
+		if lat > 50 {
+			return "America/Anchorage" // Alaska
+		} else if lat < 25 {
+			return "Pacific/Honolulu" // Hawaii
+		}
+		return "America/New_York" // Default fallback
+	}
+}
+
 // ConvertNOAAToForecast converts NOAA API response to our Forecast structure.
 func ConvertNOAAToForecast(points NOAAPointsResponse, dailyForecast NOAAForecastResponse, hourlyForecast NOAAForecastResponse, c geolocation.Coordinates) Forecast {
 	var forecast Forecast
 
 	forecast.Latitude = parseFloat(c.Latitude)
 	forecast.Longitude = parseFloat(c.Longitude)
-	forecast.Timezone = "America/New_York" // NOAA doesn't provide timezone, use default
+	// Estimate timezone from coordinates (NOAA doesn't provide timezone)
+	forecast.Timezone = getTimezoneFromCoordinates(forecast.Latitude, forecast.Longitude)
 
 	// Convert current conditions from first hourly period
 	if len(hourlyForecast.Properties.Periods) > 0 {
@@ -266,12 +388,7 @@ func ConvertNOAAToForecast(points NOAAPointsResponse, dailyForecast NOAAForecast
 	// Convert daily forecast
 	forecast.Daily = convertNOAADailyPeriodsToDataBlock(dailyForecast.Properties.Periods)
 
-	// Minutely forecast is not available from NOAA
-	forecast.Minutely = DataBlock{
-		Summary: "Minutely forecast not available from NOAA",
-		Icon:    "",
-		Data:    []DataPoint{},
-	}
+	// Note: NOAA does not provide minutely forecasts (only hourly and daily)
 
 	return forecast
 }
@@ -283,6 +400,7 @@ func convertNOAAPeriodToDataPoint(period NOAAPeriod) DataPoint {
 	// Parse time
 	t, _ := time.Parse(time.RFC3339, period.StartTime)
 	dp.Time = float64(t.Unix())
+	dp.PeriodName = period.Name
 	dp.Summary = period.ShortForecast
 	dp.DetailedForecast = period.DetailedForecast
 	dp.Icon = mapNOAAIconToIcon(period.ShortForecast)
@@ -292,6 +410,13 @@ func convertNOAAPeriodToDataPoint(period NOAAPeriod) DataPoint {
 	// Handle precipitation probability (can be null)
 	if period.ProbabilityOfPrecipitation.Value != nil {
 		dp.PrecipProbability = *period.ProbabilityOfPrecipitation.Value / 100.0
+	}
+
+	// Extract precipitation type from forecast description
+	dp.PrecipType = extractPrecipType(period.ShortForecast)
+	if dp.PrecipType == "" && dp.DetailedForecast != "" {
+		// Try detailed forecast if short forecast didn't have precip type
+		dp.PrecipType = extractPrecipType(period.DetailedForecast)
 	}
 
 	// Parse wind speed and gust
@@ -309,6 +434,16 @@ func convertNOAAPeriodToDataPoint(period NOAAPeriod) DataPoint {
 	if period.RelativeHumidity.Value != nil {
 		dp.Humidity = *period.RelativeHumidity.Value / 100.0
 	}
+
+	// Calculate apparent temperature (feels like)
+	dp.ApparentTemperature = calculateApparentTemperature(
+		dp.Temperature,
+		dp.Humidity,
+		dp.WindSpeed,
+	)
+
+	// Estimate cloud cover from forecast description
+	dp.CloudCover = estimateCloudCover(period.ShortForecast)
 
 	return dp
 }
@@ -378,6 +513,7 @@ func convertNOAADailyPeriodsToDataBlock(periods []NOAAPeriod) DataBlock {
 		// Parse time
 		t, _ := time.Parse(time.RFC3339, dayPeriod.StartTime)
 		dp.Time = float64(t.Unix())
+		dp.PeriodName = dayPeriod.Name
 		dp.Summary = dayPeriod.ShortForecast
 		dp.DetailedForecast = dayPeriod.DetailedForecast
 		dp.Icon = mapNOAAIconToIcon(dayPeriod.ShortForecast)
@@ -453,38 +589,25 @@ func mapNOAAIconToIcon(shortForecast string) string {
 	// Note: Order matters - check more specific patterns first
 	forecast := shortForecast
 	switch {
-	case contains(forecast, "Partly Cloudy"), contains(forecast, "Partly Sunny"):
+	case strings.Contains(forecast, "Partly Cloudy"), strings.Contains(forecast, "Partly Sunny"):
 		return "partly-cloudy-day"
-	case contains(forecast, "Mostly Cloudy"):
+	case strings.Contains(forecast, "Mostly Cloudy"):
 		return "cloudy"
-	case contains(forecast, "Cloudy"):
+	case strings.Contains(forecast, "Cloudy"):
 		return "cloudy"
-	case contains(forecast, "Sunny"), contains(forecast, "Clear"):
+	case strings.Contains(forecast, "Sunny"), strings.Contains(forecast, "Clear"):
 		return "clear-day"
-	case contains(forecast, "Rain"), contains(forecast, "Showers"):
+	case strings.Contains(forecast, "Rain"), strings.Contains(forecast, "Showers"):
 		return "rain"
-	case contains(forecast, "Snow"):
+	case strings.Contains(forecast, "Snow"):
 		return "snow"
-	case contains(forecast, "Thunderstorm"):
+	case strings.Contains(forecast, "Thunderstorm"):
 		return "thunderstorm"
-	case contains(forecast, "Fog"):
+	case strings.Contains(forecast, "Fog"):
 		return "fog"
 	default:
 		return "partly-cloudy-day"
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || stringContains(s, substr))
-}
-
-func stringContains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // GetNOAAAlerts retrieves active weather alerts for coordinates.

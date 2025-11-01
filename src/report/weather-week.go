@@ -21,8 +21,13 @@ func WeatherWeek(w weather.Forecast, a []air.Forecast) {
 		if day.WindGust > 0 {
 			gustStr = fmt.Sprintf("%.0f %s", day.WindGust, windSpeedUnit)
 		}
+		// Period name (e.g., "Today", "Monday") is clearer than abbreviated weekday
+		dayLabel := day.PeriodName
+		if dayLabel == "" {
+			dayLabel = time.Unix(int64(day.Time), 0).Format("Mon")
+		}
 		fmt.Fprintf(TW, formatBody,
-			time.Unix(int64(day.Time), 0).Format("Mon"),
+			dayLabel,
 			day.TemperatureMin, temperatureUnit,
 			day.TemperatureMax, temperatureUnit,
 			ToPercent(day.PrecipProbability), percentUnit,
