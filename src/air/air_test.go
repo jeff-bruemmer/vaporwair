@@ -18,15 +18,13 @@ const exZip = "Zip"
 var exCoordinates = geolocation.Coordinates{exLatitude, exLongitude, exCity, exZip}
 
 func TestBuildAirNowURL(t *testing.T) {
-	got := BuildAirNowURL(AirNowAddress, exCoordinates, exDate, exKey)
+	got := BuildAirNowURL(AirNowAddress, exZip, exKey)
 	answer := AirNowAddress +
-		"latitude=" + exCoordinates.Latitude +
-		"&longitude=" + exCoordinates.Longitude +
-		"&date=" + exDate +
+		"zipCode=" + exZip +
 		"&distance=25" +
 		"&API_KEY=" + exKey
 	if got != answer {
-		t.Errorf("BuildAirNowURL(AirNowAddress, ex.Coordinates, exDate, exKey) = %s; want "+answer, got)
+		t.Errorf("BuildAirNowURL(AirNowAddress, exZip, exKey) = %s; want "+answer, got)
 	}
 
 	// Verify HTTPS is used
@@ -193,11 +191,8 @@ func TestAirQualityIntegration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify query parameters are correct
 		query := r.URL.Query()
-		if query.Get("latitude") != coords.Latitude {
-			t.Errorf("Expected latitude %s, got %s", coords.Latitude, query.Get("latitude"))
-		}
-		if query.Get("longitude") != coords.Longitude {
-			t.Errorf("Expected longitude %s, got %s", coords.Longitude, query.Get("longitude"))
+		if query.Get("zipCode") != coords.Zip {
+			t.Errorf("Expected zipCode %s, got %s", coords.Zip, query.Get("zipCode"))
 		}
 		if query.Get("distance") != "25" {
 			t.Errorf("Expected distance 25, got %s", query.Get("distance"))
@@ -212,7 +207,7 @@ func TestAirQualityIntegration(t *testing.T) {
 	// Build URL using the actual function
 	// Use server.URL as base and replace the protocol/host part of AirNowAddress
 	testAddr := server.URL + "?"
-	url := BuildAirNowURL(testAddr, coords, "2025-10-24", "test-key")
+	url := BuildAirNowURL(testAddr, coords.Zip, "test-key")
 
 	// Get forecast
 	forecasts := GetForecast(url)

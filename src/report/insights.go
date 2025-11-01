@@ -73,6 +73,9 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 
 	fmt.Fprintf(tw, formatValueWithUnit, "Pressure", w.Daily.Data[0].Pressure, pressureUnit)
 	fmt.Fprintf(tw, formatValueWithUnit, "Visibility", w.Daily.Data[0].Visibility, distanceUnit)
+	if w.Daily.Data[0].DewPoint > 0 {
+		fmt.Fprintf(tw, formatValueWithUnit, "Dew Point", w.Daily.Data[0].DewPoint, temperatureUnit)
+	}
 
 	// Air Quality Index
 	if len(a) == 0 {
@@ -109,8 +112,6 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 			fmt.Fprintf(tw, formatMultipleValues, "Air Quality Index", "N/A", "Forecast", "not yet available")
 		}
 	}
-
-	fmt.Fprintf(tw, formatNumber, "UV Index", w.Currently.UVIndex)
 }
 
 // InsightsReport provides comparative analysis and time-based insights.

@@ -2,18 +2,18 @@
 
 Fast weather and air quality reports in your terminal.
 
-> **NOAA National Weather Service API:** Vaporwair uses the free [National Weather Service API](https://www.weather.gov/documentation/services-web-api) for weather forecasts. No API key required for weather data!
+> Vaporwair uses the free [National Weather Service API](https://www.weather.gov/documentation/services-web-api) for weather forecasts. No API key required for weather data!
 
 ## About Vaporwair
 
 Vaporwair is a command line application that combines weather and air quality forecasts to produce intelligent, actionable reports:
 
-- **Summary** - Overview with weather, air quality, and clothing recommendations
-- **Hourly weather** - Hour-by-hour forecast with temperature, precipitation, wind, and gusts
+- **Summary** - Overview with "feels like" temp, weather, air quality, and clothing recommendations
+- **Hourly weather** - Hour-by-hour forecast with temp, precipitation type, clouds, wind, and gusts
 - **Weekly forecast** - 7-day outlook with daily conditions
 - **Air quality report** - EPA AirNow data for multiple pollutants
-- **Clothing recommendations** - Smart outfit suggestions based on weather conditions
-- **Insights** - Comparative analysis and time-based planning tools
+- **Clothing recommendations** - Smart outfit suggestions based on all weather conditions
+- **Insights** - Comparative analysis with dew point, pressure, and time-based planning tools
 
 ## Rationale
 
@@ -41,7 +41,6 @@ Humidity:             83 %
 Windspeed:            0 mph
 Wind Gust:            5 mph
 Air Quality Index:    N/A Forecast not yet available
-UV Index:             0
 Precipitation:        3 %
 
 -- WHAT TO WEAR --
@@ -160,15 +159,7 @@ Accessories:
 Additional Tips:
   • Wind chill factor - dress warmer than temperature suggests
   • Moderate winds expected
-  • Moderate UV - sun protection recommended
 ```
-
-**Features:**
-
-- Temperature-based outfit recommendations (10 temperature ranges)
-- Context-aware accessories (rain gear, winter wear, sun protection, air quality masks)
-- Safety tips for extreme conditions, UV exposure, air quality, and hydration
-- Large temperature swing warnings (bring layers)
 
 ### Insights Report (`-i`)
 
@@ -207,24 +198,9 @@ Temperature timing (next 12 hours):
   Coldest: 42°F at 6:00 AM
 ```
 
-**Comparative Analysis:**
-
-- Warmest/coldest days of the week
-- Windiest day (including gusts)
-- Highest precipitation probability
-- Largest daily temperature swing
-- Automatic notable condition alerts
-
-**Time-Based Insights:**
-
-- Best outdoor window (4-hour blocks optimized for temperature, rain, wind)
-- Rain windows (periods with ≥50% precipitation)
-- High wind periods (≥20 mph threshold)
-- Temperature timing for the next 12 hours
-
 ## Setup
 
-1. Obtain a free API key from [AirNow](https://docs.airnowapi.org/) for air quality reports from the Environmental Protection Agency.
+1. (Optional) Obtain a free API key from [AirNow](https://docs.airnowapi.org/) for air quality reports from the Environmental Protection Agency.
    - Weather data is provided by NOAA's National Weather Service API and does not require an API key.
 
 2. Download and install the [Go programming language](https://golang.org/).
@@ -304,30 +280,7 @@ It then calls the NOAA National Weather Service and AirNow APIs to get location-
 ## Design constraints
 
 - Only standard Go packages (i.e. no external libraries).
-- Reports must fit in an unmaximized terminal to avoid scrolling.
 - Only one report can be run at a time.
-
-## Recent Updates
-
-### Version 2.0 (NOAA Migration & New Features)
-
-- **NOAA National Weather Service API** - Migrated from Dark Sky to free NOAA API
-- **Zip Code Support** - Get weather for any US location with `-zip` flag
-- **Wind Gust Data** - Added to hourly, weekly, and summary reports
-- **Temperature Trends** - Shows rising/falling temperature indicators
-- **Detailed Forecasts** - Rich narrative descriptions from NOAA
-- **Clothing Recommendations** - Smart outfit suggestions based on all weather conditions
-- **Insights Report** - Comparative weekly analysis and time-based planning tools
-- **Improved Error Handling** - Standardized error patterns throughout
-- **Optimistic Caching** - Documented 5-minute cache strategy
-- **Presentation Layer** - Abstraction between data and reports for easier maintenance
-
-## Roadmap
-
-- Add flag to re-enter API keys
-- Support for international units (metric)
-- Additional activity recommendations (outdoor sports, gardening, etc.)
-- Historical weather comparisons
 
 ## License
 
