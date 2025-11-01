@@ -41,7 +41,6 @@ Humidity:             83 %
 Windspeed:            0 mph
 Wind Gust:            5 mph
 Air Quality Index:    N/A Forecast not yet available
-UV Index:             0
 Precipitation:        3 %
 
 -- WHAT TO WEAR --
@@ -160,7 +159,6 @@ Accessories:
 Additional Tips:
   • Wind chill factor - dress warmer than temperature suggests
   • Moderate winds expected
-  • Moderate UV - sun protection recommended
 ```
 
 ### Insights Report (`-i`)
