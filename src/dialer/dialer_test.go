@@ -8,14 +8,14 @@ import (
 	"time"
 )
 
-// Test 4.1: HTTPClient Interface Implementation
+// HTTPClient Interface Implementation
 // Validates interface contract (compile-time check)
 func TestDefaultHTTPClientImplementsInterface(t *testing.T) {
 	var _ HTTPClient = &DefaultHTTPClient{}
 	// This is a compile-time check - if it compiles, the interface is implemented
 }
 
-// Test 4.2: NetReq Success Case
+// NetReq Success Case
 // Validates successful HTTP GET request
 func TestNetReqSuccess(t *testing.T) {
 	// Setup: Mock HTTP server
@@ -38,7 +38,7 @@ func TestNetReqSuccess(t *testing.T) {
 	}
 }
 
-// Test 4.3: NetReq Timeout Handling
+// NetReq Timeout Handling
 // Validates timeout behavior
 func TestNetReqTimeout(t *testing.T) {
 	// Setup: Slow mock server (delays > timeout)
@@ -49,7 +49,7 @@ func TestNetReqTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Test: NetReq with short timeout (1 second)
+	// NetReq with short timeout (1 second)
 	// Note: NetReq expects integer seconds, multiplies by time.Second internally
 	start := time.Now()
 	_, err := NetReq(server.URL, 1, false) // 1 second timeout
@@ -71,7 +71,7 @@ func TestNetReqTimeout(t *testing.T) {
 	}
 }
 
-// Test 4.4: NetReqWithUserAgent Headers
+// NetReqWithUserAgent Headers
 // Validates custom User-Agent header
 func TestNetReqWithUserAgent(t *testing.T) {
 	customUA := "TestAgent/1.0"
@@ -97,7 +97,7 @@ func TestNetReqWithUserAgent(t *testing.T) {
 	}
 }
 
-// Test 4.4b: NetReqWithUserAgent without UA
+// NetReqWithUserAgent without UA
 // Validates behavior when UA is empty string
 func TestNetReqWithUserAgentEmpty(t *testing.T) {
 	hasUserAgent := false
@@ -124,7 +124,7 @@ func TestNetReqWithUserAgentEmpty(t *testing.T) {
 	_ = hasUserAgent // Don't assert on this - it's implementation-dependent
 }
 
-// Test 4.5: GZIP Encoding Support
+// GZIP Encoding Support
 // Validates Accept-Encoding header
 func TestGzipEncoding(t *testing.T) {
 	tests := []struct {

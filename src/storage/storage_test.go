@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Test 1.1: Config File Creation and Reading
+// Config File Creation and Reading
 // Validates that config files are created with correct structure and can be read back
 // This ensures no regression when migrating from ioutil to os
 func TestCreateAndGetConfig(t *testing.T) {
@@ -62,7 +62,7 @@ func TestCreateAndGetConfig(t *testing.T) {
 	}
 }
 
-// Test 1.2: Weather Forecast Persistence
+// Weather Forecast Persistence
 // Validates forecast serialization to ensure migration doesn't break cache functionality
 func TestSaveAndLoadWeatherForecast(t *testing.T) {
 	// Setup: Create temp directory
@@ -152,7 +152,7 @@ func TestSaveAndLoadWeatherForecast(t *testing.T) {
 	}
 }
 
-// Test 1.3: Air Forecast Persistence
+// Air Forecast Persistence
 // Validates air quality cache functionality
 func TestSaveAndLoadAirForecast(t *testing.T) {
 	// Setup: Create temp directory
@@ -233,7 +233,7 @@ func TestSaveAndLoadAirForecast(t *testing.T) {
 	}
 }
 
-// Test 1.4: Call Info Persistence
+// Call Info Persistence
 // Validates cache metadata storage - critical for cache timeout logic
 func TestUpdateAndLoadCallInfo(t *testing.T) {
 	// Setup: Create temp directory
@@ -300,7 +300,7 @@ func TestUpdateAndLoadCallInfo(t *testing.T) {
 	}
 }
 
-// Test 1.5: File Permission Verification
+// File Permission Verification
 // This test will FAIL with current code (0644) and PASS after fix (0600 for config)
 func TestFilePermissions(t *testing.T) {
 	// Skip on Windows (Unix permissions don't apply)
@@ -322,7 +322,7 @@ func TestFilePermissions(t *testing.T) {
 		t.Fatalf("Failed to create vaporwair dir: %v", err)
 	}
 
-	// Test: Create config file (contains API key - should be 0600)
+	// Create config file (contains API key - should be 0600)
 	apiKey := "secret-api-key"
 	configPath := tempDir + ConfigFileName
 	err = CreateConfig(tempDir, apiKey)
@@ -343,7 +343,7 @@ func TestFilePermissions(t *testing.T) {
 		t.Errorf("Config contains API keys and should not be world-readable")
 	}
 
-	// Test: Create forecast files (public data - 0644 is acceptable)
+	// Create forecast files (public data - 0644 is acceptable)
 	forecastPath := tempDir + SavedWeatherFileName
 	sampleForecast := weather.Forecast{
 		Latitude:  40.7128,
@@ -363,7 +363,7 @@ func TestFilePermissions(t *testing.T) {
 	}
 }
 
-// Test 1.6: Error Handling - Unreadable Files
+// Error Handling - Unreadable Files
 // Validates proper error returns instead of log.Fatal
 func TestLoadSavedWeatherError(t *testing.T) {
 	t.Skip("Skipping error handling test - current code uses log.Fatal which exits the process")
@@ -373,7 +373,7 @@ func TestLoadSavedWeatherError(t *testing.T) {
 	// This should be fixed in a future iteration when addressing Issue #5
 }
 
-// Test 1.7: Backward Compatibility - Existing Cache
+// Backward Compatibility - Existing Cache
 // Ensures migration doesn't break existing cached data
 func TestBackwardCompatibilityWithExistingCache(t *testing.T) {
 	// Setup: Create temp directory
@@ -427,7 +427,7 @@ func TestBackwardCompatibilityWithExistingCache(t *testing.T) {
 	}
 }
 
-// Test 3.2: UpdateDefaultZipCode Preserves Permissions
+// UpdateDefaultZipCode Preserves Permissions
 // Ensures updating config doesn't accidentally change file permissions
 func TestUpdateDefaultZipCodePreservesPermissions(t *testing.T) {
 	// Skip on Windows

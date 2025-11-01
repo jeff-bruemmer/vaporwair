@@ -8,17 +8,17 @@ import (
 	"testing"
 )
 
-// Test 2.1: HTTPS Protocol Validation
+// HTTPS Protocol Validation
 // This test will FAIL with current code (http) and PASS after fix (https)
 func TestIPAPIUsesHTTPS(t *testing.T) {
-	// PRIMARY test for Issue #2 - validates security requirement
+	// PRIMARY test for security requirement
 	if !strings.HasPrefix(IPAPIAddress, "https://") {
 		t.Errorf("IP-API must use HTTPS for security, got: %s", IPAPIAddress)
 		t.Error("HTTP connections are vulnerable to MITM attacks that could leak location data")
 	}
 }
 
-// Test 2.2: GetGeoData Integration with Mock Server
+// GetGeoData Integration with Mock Server
 // Validates full flow with HTTP(S) works correctly
 func TestGetGeoDataWithMockServer(t *testing.T) {
 	// Create mock HTTP server (note: httptest uses HTTP, but we test the data flow)
@@ -66,7 +66,7 @@ func TestGetGeoDataWithMockServer(t *testing.T) {
 	}
 }
 
-// Test 2.3: GetGeoData Error Handling
+// GetGeoData Error Handling
 // Validates proper error cases
 func TestGetGeoDataErrors(t *testing.T) {
 	tests := []struct {
@@ -114,7 +114,7 @@ func TestGetGeoDataErrors(t *testing.T) {
 	}
 }
 
-// Test 2.4: GetGeoDataFromZip Integration
+// GetGeoDataFromZip Integration
 // Validates zip code lookup functionality
 func TestGetGeoDataFromZip(t *testing.T) {
 	tests := []struct {
@@ -157,7 +157,7 @@ func TestGetGeoDataFromZip(t *testing.T) {
 	}
 }
 
-// Test 2.4b: GetGeoDataFromZip Success Case
+// GetGeoDataFromZip Success Case
 func TestGetGeoDataFromZipSuccess(t *testing.T) {
 	// Sample zippopotam.us response
 	sampleZipResponse := ZipCodeResponse{
@@ -199,7 +199,7 @@ func TestGetGeoDataFromZipSuccess(t *testing.T) {
 	t.Skip("Skipping live API test - requires network access and may fail if API is down")
 }
 
-// Test 2.4c: GetGeoDataFromZip 404 Handling
+// GetGeoDataFromZip 404 Handling
 func TestGetGeoDataFromZip404(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -211,7 +211,7 @@ func TestGetGeoDataFromZip404(t *testing.T) {
 	t.Skip("Skipping 404 test - would require dependency injection to test with mock server")
 }
 
-// Test 2.5: Coordinate Formatting
+// Coordinate Formatting
 // Validates trimming logic
 func TestFormatCoordinates(t *testing.T) {
 	tests := []struct {
@@ -287,7 +287,7 @@ func TestFormatCoordinates(t *testing.T) {
 	}
 }
 
-// Test 2.6: Backward Compatibility - Cached Coordinates
+// Backward Compatibility - Cached Coordinates
 // Ensures cached location data still works
 func TestBackwardCompatibilityCachedCoordinates(t *testing.T) {
 	// Simulate coordinates that might be in cache from old format
