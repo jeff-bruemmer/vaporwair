@@ -8,7 +8,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"os/user"
@@ -73,7 +73,6 @@ func Capture(prompt string) string {
 
 func CreateConfig(homeDir, anak string) error {
 	path := homeDir + ConfigFileName
-	os.Create(path)
 	config := Config{}
 	config.AirNowAPIKey = anak
 	c, err := json.Marshal(config)
@@ -81,10 +80,11 @@ func CreateConfig(homeDir, anak string) error {
 		fmt.Println("There was an error marshalling the configuration.")
 		return err
 	}
-	err = ioutil.WriteFile(path, c, 0644)
+	// Use 0600 permissions for config file (contains API keys)
+	// os.WriteFile will create the file if it doesn't exist
+	err = os.WriteFile(path, c, 0600)
 	if err != nil {
 		fmt.Println("There was an error writing the config file to ", path)
-		os.Remove(path)
 		return err
 	}
 	return nil
@@ -119,7 +119,7 @@ func CreateVaporwairDir(path string) {
 // Loads previous weather forecast.
 func LoadSavedWeather(path string) (weather.Forecast, error) {
 	var f weather.Forecast
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println("Error reading forecast from disk.", err)
 	}
@@ -133,7 +133,7 @@ func LoadSavedWeather(path string) (weather.Forecast, error) {
 // Loads previous air quality forecast.
 func LoadSavedAir(path string) ([]air.Forecast, error) {
 	var f []air.Forecast
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println("Error reading forecast from disk.", err)
 	}
@@ -153,7 +153,7 @@ func GetConfig(filepath string) Config {
 	}
 	defer configFile.Close()
 	var config Config
-	bytes, _ := ioutil.ReadAll(configFile)
+	bytes, _ := io.ReadAll(configFile)
 	// Validate json data
 	valid := json.Valid(bytes)
 	if !valid {
@@ -216,7 +216,8 @@ func UpdateDefaultZipCode(homeDir string, zipCode string) error {
 		return fmt.Errorf("error marshalling config: %w", err)
 	}
 
-	err = ioutil.WriteFile(configFile, configData, 0644)
+	// Use 0600 permissions for config file (contains API keys)
+	err = os.WriteFile(configFile, configData, 0600)
 	if err != nil {
 		return fmt.Errorf("error writing config file: %w", err)
 	}
@@ -243,7 +244,7 @@ func UpdateLastCall(c geolocation.Coordinates, path string) error {
 // to retrieve forecast from server or disk
 func LoadCallInfo(path string) (APICallInfo, error) {
 	var lastCall APICallInfo
-	f, err := ioutil.ReadFile(path)
+	f, err := os.ReadFile(path)
 	if err != nil {
 		return lastCall, err
 	}
@@ -261,7 +262,8 @@ func SaveCall(path string, info APICallInfo) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(path, c, 0644)
+	// Call info is public data (coordinates, timestamp), 0644 is acceptable
+	err = os.WriteFile(path, c, 0644)
 	if err != nil {
 		return err
 	}
@@ -274,7 +276,8 @@ func SaveWeatherForecast(path string, f weather.Forecast) bool {
 		fmt.Println("Error marshalling weather forecast before saving.\n", err)
 		return false
 	}
-	err = ioutil.WriteFile(path, c, 0644)
+	// Weather forecast is public data, 0644 is acceptable
+	err = os.WriteFile(path, c, 0644)
 	if err != nil {
 		return false
 	}
@@ -287,7 +290,8 @@ func SaveAirForecast(path string, a []air.Forecast) bool {
 		fmt.Println("Error marshalling air forecast before saving.\n", err)
 		return false
 	}
-	err = ioutil.WriteFile(path, c, 0644)
+	// Air quality forecast is public data, 0644 is acceptable
+	err = os.WriteFile(path, c, 0644)
 	if err != nil {
 		return false
 	}

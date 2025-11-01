@@ -34,7 +34,8 @@ type GeoData struct {
 	Query       string  `json:"query"`
 }
 
-const IPAPIAddress = "http://ip-api.com/json"
+// Use HTTPS to protect against MITM attacks that could leak location data
+const IPAPIAddress = "https://ip-api.com/json"
 const ZipCodeAPIAddress = "https://api.zippopotam.us/us/"
 
 // trimCoordinates drops trailing zeroes following
