@@ -166,7 +166,9 @@ func PrintBanner() {
 
 func PrintSpaceTime(t, t1 time.Time, c geolocation.Coordinates) {
 	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
-	fmt.Println(c.City, c.Zip, "|", c.Latitude, ",", c.Longitude)
+	// Display location on two lines for better terminal width compatibility
+	fmt.Printf("%s, %s\n", c.City, c.Zip)
+	fmt.Printf("%s, %s\n", c.Latitude, c.Longitude)
 }
 
 // SaveForecasts persists forecasts to disk for optimistic caching.

@@ -8,8 +8,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
+	"unsafe"
 )
 
 // Tabwriter configuration
@@ -36,8 +38,8 @@ var Separator = "+++"
 
 var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags)
 
-// HeadingWidth is set dynamically based on content width
-var HeadingWidth = 75
+// HeadingWidth is set dynamically based on terminal width or content
+var HeadingWidth = GetTerminalWidth()
 
 // Format strings for tabwriter output
 var formatValueWithTime = "%s:\t%.0f %s at %v %s\n"      // e.g., "Min Temperature: 33 °F at 19:00 HH:MM"
@@ -46,6 +48,101 @@ var formatLabelValue = "%s:\t%v %s\n"                    // e.g., "Sunrise: 06:1
 var formatMultipleValues = "%s:\t%v %s %s\n"             // e.g., "Air Quality Index: 55 O3 Moderate"
 var formatString = "%s:\t%s\n"                           // e.g., "Currently: Mostly Cloudy"
 var formatNumber = "%s:\t%v\n"                           // e.g., "UV Index: 0"
+
+// winsize struct for terminal size detection
+type winsize struct {
+	Row    uint16
+	Col    uint16
+	Xpixel uint16
+	Ypixel uint16
+}
+
+// GetTerminalWidth detects the current terminal width.
+// Falls back to 80 columns if detection fails.
+func GetTerminalWidth() int {
+	ws := &winsize{}
+	retCode, _, _ := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(syscall.Stdout),
+		uintptr(syscall.TIOCGWINSZ),
+		uintptr(unsafe.Pointer(ws)))
+
+	if int(retCode) == -1 {
+		// Fallback to 80 columns if detection fails
+		return 80
+	}
+
+	return int(ws.Col)
+}
+
+// wrapTextForTabwriter wraps text to fit within the terminal width while preserving words.
+// Returns a single string with tab-indented line breaks for use with tabwriter.
+func wrapTextForTabwriter(text string, maxWidth int) string {
+	if len(text) <= maxWidth {
+		return text
+	}
+
+	var result strings.Builder
+	words := strings.Fields(text)
+	lineLength := 0
+
+	for i, word := range words {
+		wordLen := len(word)
+
+		// If adding this word would exceed the width, start a new line
+		if lineLength+wordLen > maxWidth && lineLength > 0 {
+			result.WriteString("\n\t")
+			lineLength = 0
+		} else if i > 0 && lineLength > 0 {
+			result.WriteString(" ")
+			lineLength++
+		}
+
+		result.WriteString(word)
+		lineLength += wordLen
+	}
+
+	return result.String()
+}
+
+// calculateValueColumnWidth calculates the available width for the value column
+// in a tabwriter output, accounting for the label column width and padding.
+func calculateValueColumnWidth(label string) int {
+	termWidth := GetTerminalWidth()
+
+	// Tabwriter will expand the first column to fit the widest label
+	// In our reports, we need to consider common labels
+	maxLabelWidth := len(label)
+	commonLabels := []string{
+		"Current Temperature",
+		"Air Quality Index",
+		"Tomorrow vs Today",
+		"This week",
+	}
+	for _, l := range commonLabels {
+		if len(l) > maxLabelWidth {
+			maxLabelWidth = len(l)
+		}
+	}
+
+	// Ensure minimum width from tabwriter config
+	if maxLabelWidth < minwidth {
+		maxLabelWidth = minwidth
+	}
+
+	// Account for tabwriter padding
+	firstColumnWidth := maxLabelWidth + padding
+
+	// Calculate available width for value column
+	// Leave some margin for safety
+	valueWidth := termWidth - firstColumnWidth - 5
+
+	// Ensure a reasonable minimum
+	if valueWidth < 40 {
+		valueWidth = 40
+	}
+
+	return valueWidth
+}
 
 // Adds title frame
 func Title(t string) string {
@@ -89,9 +186,14 @@ func SetHeadingWidthFromContent(contentGenerator func(*tabwriter.Writer)) {
 	// Measure max line width
 	maxWidth := MeasureMaxLineWidth(buf.String())
 
-	// Set heading width (with a minimum of 60)
+	// Get terminal width to ensure we don't exceed it
+	termWidth := GetTerminalWidth()
+
+	// Set heading width (with a minimum of 60, maximum of terminal width)
 	if maxWidth < 60 {
 		HeadingWidth = 60
+	} else if maxWidth > termWidth {
+		HeadingWidth = termWidth
 	} else {
 		HeadingWidth = maxWidth
 	}
@@ -270,16 +372,24 @@ func AirQualityIndex(f []air.Forecast) {
 
 // Prints the summary for the day.
 func DailySummary(f weather.Forecast) {
-	fmt.Fprintf(TW, formatString, "Currently", AddPeriod(f.Currently.Summary))
+	// Calculate proper width for value column based on terminal size
+	maxWidth := calculateValueColumnWidth("Currently")
+	wrappedSummary := wrapTextForTabwriter(AddPeriod(f.Currently.Summary), maxWidth)
+	fmt.Fprintf(TW, formatString, "Currently", wrappedSummary)
+
 	// Show detailed forecast if available
 	if f.Currently.DetailedForecast != "" {
-		fmt.Fprintf(TW, formatString, "Details", AddPeriod(f.Currently.DetailedForecast))
+		wrappedDetails := wrapTextForTabwriter(AddPeriod(f.Currently.DetailedForecast), maxWidth)
+		fmt.Fprintf(TW, formatString, "Details", wrappedDetails)
 	}
 }
 
 // Prints the summary for the week.
 func WeeklySummary(f weather.Forecast) {
-	fmt.Fprintf(TW, formatString, "This week", AddPeriod(f.Daily.Summary))
+	// Calculate proper width for value column based on terminal size
+	maxWidth := calculateValueColumnWidth("This week")
+	wrappedSummary := wrapTextForTabwriter(AddPeriod(f.Daily.Summary), maxWidth)
+	fmt.Fprintf(TW, formatString, "This week", wrappedSummary)
 }
 
 // WeatherAlerts prints active weather alerts if any exist.
@@ -302,12 +412,10 @@ func WeatherAlerts(f weather.Forecast) {
 			fmt.Fprintf(TW, "Expires:\t%s\n", expiryTime)
 		}
 
-		// Show description (truncate if too long)
-		description := alert.Description
-		if len(description) > 200 {
-			description = description[:197] + "..."
-		}
-		fmt.Fprintf(TW, "Details:\t%s\n", description)
+		// Wrap description instead of truncating
+		maxWidth := calculateValueColumnWidth("Details")
+		wrappedDescription := wrapTextForTabwriter(alert.Description, maxWidth)
+		fmt.Fprintf(TW, "Details:\t%s\n", wrappedDescription)
 	}
 	TW.Flush()
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 	"text/tabwriter"
+	"time"
 )
 
 // generateInsightsContent generates the insights report content to a given tabwriter
@@ -39,19 +40,27 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 		fmt.Fprintf(tw, formatLabelValue, "Temp Trend", w.Daily.Data[0].TemperatureTrend, "")
 	}
 
-	// Hourly trend analysis
+	// Hourly trend analysis - show next few future hours
 	if len(w.Hourly.Data) >= 3 {
 		fmt.Fprintln(tw, "")
 		if includeHeadings {
 			fmt.Fprintln(tw, Title("Next Few Hours"))
 		}
-		for i := 0; i < 3 && i < len(w.Hourly.Data); i++ {
+
+		// Use actual current time to filter out past hours
+		currentTime := float64(time.Now().Unix())
+		hoursShown := 0
+		for i := 0; i < len(w.Hourly.Data) && hoursShown < 3; i++ {
 			hour := w.Hourly.Data[i]
-			fmt.Fprintf(tw, "%s:\t%.0f%s - %s\n",
-				FormatTime(hour.Time),
-				Round(hour.Temperature),
-				temperatureUnit,
-				hour.Summary)
+			// Only show hours that are in the future
+			if hour.Time > currentTime {
+				fmt.Fprintf(tw, "%s:\t%.0f%s - %s\n",
+					FormatTime(hour.Time),
+					Round(hour.Temperature),
+					temperatureUnit,
+					hour.Summary)
+				hoursShown++
+			}
 		}
 	}
 
@@ -60,7 +69,10 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 	if includeHeadings {
 		fmt.Fprintln(tw, Title("Week Overview"))
 	}
-	fmt.Fprintf(tw, formatString, "This week", AddPeriod(w.Daily.Summary))
+	// Calculate proper width for value column based on terminal size
+	maxWidth := calculateValueColumnWidth("This week")
+	wrappedSummary := wrapTextForTabwriter(AddPeriod(w.Daily.Summary), maxWidth)
+	fmt.Fprintf(tw, formatString, "This week", wrappedSummary)
 
 	// Additional metrics
 	fmt.Fprintf(tw, formatValueWithUnit, "Precipitation", Round(ToPercent(w.Daily.Data[0].PrecipProbability)), percentUnit)
