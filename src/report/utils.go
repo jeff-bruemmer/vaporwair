@@ -62,21 +62,13 @@ func GetPrecipTypeOrDefault(precipType string) string {
 }
 
 // SafeSliceHourly safely slices hourly data with bounds checking.
-// Returns a slice of at most maxHours elements, or fewer if the data
-// doesn't contain that many elements. Returns an empty slice if maxHours <= 0.
 func SafeSliceHourly(data []weather.DataPoint, maxHours int) []weather.DataPoint {
-	if maxHours <= 0 {
+	if maxHours <= 0 || len(data) == 0 {
 		return []weather.DataPoint{}
 	}
-
-	if len(data) < maxHours {
+	if maxHours > len(data) {
 		maxHours = len(data)
 	}
-
-	if maxHours == 0 {
-		return []weather.DataPoint{}
-	}
-
 	return data[:maxHours]
 }
 
@@ -93,6 +85,16 @@ func IsPrecipitationNote(note string) bool {
 	}
 
 	return false
+}
+
+// FormatTemperatureString returns a temperature string with "feels like" if the difference exceeds threshold.
+// Uses FeelsLikeDiffThreshold (3°F) to determine when to show the "feels like" temperature.
+func FormatTemperatureString(actual, feelsLike float64, unit string) string {
+	diff := feelsLike - actual
+	if diff > FeelsLikeDiffThreshold || diff < -FeelsLikeDiffThreshold {
+		return fmt.Sprintf("%.0f%s (feels %.0f%s)", actual, unit, feelsLike, unit)
+	}
+	return fmt.Sprintf("%.0f%s", actual, unit)
 }
 
 // FormatTemperatureWithFeelsLike prints temperature with "feels like" if the difference exceeds threshold.
@@ -132,4 +134,58 @@ func GetHighestAQIForToday(a []air.Forecast) (aqi int, particle, category string
 	}
 
 	return aqi, particle, category
+}
+
+// WrapText wraps text to specified width, breaking on word boundaries.
+// Returns a slice of strings, one for each line.
+func WrapText(text string, width int) []string {
+	if len(text) <= width {
+		return []string{text}
+	}
+
+	words := strings.Fields(text)
+	var lines []string
+	var currentLine string
+
+	for _, word := range words {
+		if currentLine == "" {
+			currentLine = word
+		} else if len(currentLine)+1+len(word) <= width {
+			currentLine += " " + word
+		} else {
+			lines = append(lines, currentLine)
+			currentLine = word
+		}
+	}
+
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	return lines
+}
+
+// FormatWindString formats wind speed and direction with optional gust information.
+// If withFrom is true, uses "from {direction}" format, otherwise uses "{direction}" format.
+func FormatWindString(speed, bearing, gust float64, unit string, withFrom bool) string {
+	cardinalDir := DegreesToCardinal(bearing)
+
+	if withFrom {
+		if gust > 0 {
+			return fmt.Sprintf("%.0f %s from %s (gusts %.0f)", speed, unit, cardinalDir, gust)
+		}
+		return fmt.Sprintf("%.0f %s from %s", speed, unit, cardinalDir)
+	}
+
+	if gust > 0 {
+		return fmt.Sprintf("%.0f %s %s (gusts %.0f)", speed, unit, cardinalDir, gust)
+	}
+	return fmt.Sprintf("%.0f %s %s", speed, unit, cardinalDir)
+}
+
+// DegreesToCardinal converts wind bearing in degrees to cardinal direction.
+func DegreesToCardinal(degrees float64) string {
+	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
+	index := int((degrees + 11.25) / 22.5)
+	return directions[index%16]
 }

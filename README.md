@@ -27,7 +27,6 @@ The default report includes weather overview, current conditions, air quality, a
 
 ```
 $ vaporwair
-Forecasts fetched in 0.50 seconds.
 Fri Oct 24 21:22:08 EDT 2025
 Lebanon 03766 | 43.6444 , -72.2455
 This week:            Mostly cloudy, with a low around 33. Northwest wind around 0 mph.
@@ -269,13 +268,15 @@ It then calls the NOAA National Weather Service and AirNow APIs to get location-
 
 ### On Vaporwair speed
 
-1. To prevent needless network calls, Vaporwair determines if the user made a call within the last five minutes. If so, Vaporwair assumes the data is still valid, and executes reports using the last stored call. This shortcut assumes the coordinates have not meaningfully changed in the last five minutes.
+1. To prevent needless network calls, Vaporwair uses a 5-minute cache. If you made a call recently with the same location, it serves cached data instead of hitting the APIs again.
 
-2. If the data has expired, Vaporwair kicks off asynchronous API calls to retrieve new forecasts. It makes optimistic calls to the AirNow and NOAA APIs using the previous coordinates, and a call to the IP-API to get the current coordinates.
+2. When cache is expired or missing, Vaporwair:
+   - Determines your coordinates (via zip code or IP geolocation)
+   - Makes parallel async calls to NOAA and AirNow APIs
+   - Both API calls execute concurrently with a 30-second timeout
+   - Displays results once all data is retrieved
 
-3. After Vaporwair acquires the updated coordinates from the IP-API, it compares the updated coordinates to the coordinates used for the optimistic calls in step 2. If the coordinates match, the forecast is valid for the location and Vaporwair executes the report. If not: (Step 4).
-
-4. Vaporwair asynchronously calls the APIs with the updated coordinates, waits for the updated forecasts, executes the Summary (or user-flagged) report, and stores the forecast data for subsequent reports.
+3. Cached forecasts are location-aware - moving to a new location or changing zip codes invalidates the cache.
 
 ## Design constraints
 

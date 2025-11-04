@@ -293,7 +293,7 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	for _, note := range rec.Notes {
 		// Skip precipitation-related notes since we handle those above
 		if !IsPrecipitationNote(note) {
-			wrapped := wrapText(note, 70)
+			wrapped := WrapText(note, 70)
 			for i, line := range wrapped {
 				if i == 0 {
 					fmt.Fprintf(TW, "\t• %s\n", line)
@@ -305,32 +305,4 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	}
 
 	TW.Flush()
-}
-
-// wrapText wraps text to specified width, breaking on spaces.
-func wrapText(text string, width int) []string {
-	if len(text) <= width {
-		return []string{text}
-	}
-
-	words := strings.Fields(text)
-	var lines []string
-	var currentLine string
-
-	for _, word := range words {
-		if currentLine == "" {
-			currentLine = word
-		} else if len(currentLine)+1+len(word) <= width {
-			currentLine += " " + word
-		} else {
-			lines = append(lines, currentLine)
-			currentLine = word
-		}
-	}
-
-	if currentLine != "" {
-		lines = append(lines, currentLine)
-	}
-
-	return lines
 }

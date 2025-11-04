@@ -11,9 +11,6 @@ Handles data from IPAPI requests, which uses IP addresses to obtain geolocation 
 ## report
 Formats data from API calls into specific reports for display in terminal.
 
-## sample
-Sample data for development.
-
 ## storage
 Contains OS utilities for storing and retrieving payloads from API calls.
 

@@ -24,10 +24,10 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 
 	// Show detailed forecast for today if available
 	if daily.DetailedForecast != "" {
-		wrapped := wrapTextSimple(AddPeriod(daily.DetailedForecast), HeadingWidth-4)
+		wrapped := strings.Join(WrapText(AddPeriod(daily.DetailedForecast), HeadingWidth-4), "\n")
 		fmt.Fprintf(tw, "%s\n", wrapped)
 	} else if daily.Summary != "" {
-		wrapped := wrapTextSimple(AddPeriod(daily.Summary), HeadingWidth-4)
+		wrapped := strings.Join(WrapText(AddPeriod(daily.Summary), HeadingWidth-4), "\n")
 		fmt.Fprintf(tw, "%s\n", wrapped)
 	}
 	fmt.Fprintln(tw, "")
@@ -63,11 +63,8 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 	}
 
 	// Wind
-	windDir := DegreesToCardinal(current.WindBearing)
-	fmt.Fprintf(tw, "Wind:\t%.0f %s from %s\n", current.WindSpeed, windSpeedUnit, windDir)
-	if current.WindGust > 0 {
-		fmt.Fprintf(tw, formatValueWithUnit, "Gusts", current.WindGust, windSpeedUnit)
-	}
+	windStr := FormatWindString(current.WindSpeed, current.WindBearing, current.WindGust, windSpeedUnit, true)
+	fmt.Fprintf(tw, "Wind:\t%s\n", windStr)
 
 	// Pressure and visibility
 	if current.Pressure > 0 {
@@ -126,15 +123,7 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 			}
 
 			// Format temperature with feels like if different
-			tempStr := fmt.Sprintf("%.0f%s", Round(hour.Temperature), temperatureUnit)
-			if hour.ApparentTemperature > 0 {
-				diff := hour.ApparentTemperature - hour.Temperature
-				if diff > 3 || diff < -3 {
-					tempStr = fmt.Sprintf("%.0f%s (feels %.0f%s)",
-						Round(hour.Temperature), temperatureUnit,
-						Round(hour.ApparentTemperature), temperatureUnit)
-				}
-			}
+			tempStr := FormatTemperatureString(Round(hour.Temperature), Round(hour.ApparentTemperature), temperatureUnit)
 
 			// Build precipitation string
 			precipStr := ""
@@ -149,11 +138,7 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 			}
 
 			// Build wind string
-			windDir := DegreesToCardinal(hour.WindBearing)
-			windStr := fmt.Sprintf("%.0f %s %s", hour.WindSpeed, windSpeedUnit, windDir)
-			if hour.WindGust > 0 {
-				windStr = fmt.Sprintf("%.0f %s %s (gusts %.0f)", hour.WindSpeed, windSpeedUnit, windDir, hour.WindGust)
-			}
+			windStr := FormatWindString(hour.WindSpeed, hour.WindBearing, hour.WindGust, windSpeedUnit, false)
 
 			fmt.Fprintf(TW, "%s\t%s\t%s\t%s\t%s\n",
 				periodLabel,
@@ -169,31 +154,3 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println()
 }
 
-// wrapTextSimple wraps text to specified width without adding tabs (for standalone text)
-func wrapTextSimple(text string, maxWidth int) string {
-	if len(text) <= maxWidth {
-		return text
-	}
-
-	var result string
-	words := strings.Fields(text)
-	lineLength := 0
-
-	for i, word := range words {
-		wordLen := len(word)
-
-		// If adding this word would exceed the width, start a new line
-		if lineLength+wordLen > maxWidth && lineLength > 0 {
-			result += "\n"
-			lineLength = 0
-		} else if i > 0 && lineLength > 0 {
-			result += " "
-			lineLength++
-		}
-
-		result += word
-		lineLength += wordLen
-	}
-
-	return result
-}

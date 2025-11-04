@@ -73,36 +73,6 @@ func GetTerminalWidth() int {
 	return int(ws.Col)
 }
 
-// wrapTextForTabwriter wraps text to fit within the terminal width while preserving words.
-// Returns a single string with tab-indented line breaks for use with tabwriter.
-func wrapTextForTabwriter(text string, maxWidth int) string {
-	if len(text) <= maxWidth {
-		return text
-	}
-
-	var result strings.Builder
-	words := strings.Fields(text)
-	lineLength := 0
-
-	for i, word := range words {
-		wordLen := len(word)
-
-		// If adding this word would exceed the width, start a new line
-		if lineLength+wordLen > maxWidth && lineLength > 0 {
-			result.WriteString("\n\t")
-			lineLength = 0
-		} else if i > 0 && lineLength > 0 {
-			result.WriteString(" ")
-			lineLength++
-		}
-
-		result.WriteString(word)
-		lineLength += wordLen
-	}
-
-	return result.String()
-}
-
 // calculateValueColumnWidth calculates the available width for the value column
 // in a tabwriter output, accounting for the label column width and padding.
 func calculateValueColumnWidth(label string) int {
@@ -250,21 +220,10 @@ func Humidity(f weather.Forecast) {
 	fmt.Fprintf(TW, formatValueWithUnit, "Humidity", ToPercent(f.Currently.Humidity), percentUnit)
 }
 
-// DegreesToCardinal converts wind bearing in degrees to cardinal direction.
-func DegreesToCardinal(degrees float64) string {
-	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
-	index := int((degrees + 11.25) / 22.5)
-	return directions[index%16]
-}
-
 // Prints the windspeed average for the day with direction.
 func Windspeed(f weather.Forecast) {
-	windDir := DegreesToCardinal(f.Currently.WindBearing)
-	fmt.Fprintf(TW, "Windspeed:\t%.0f %s from %s\n", f.Currently.WindSpeed, windSpeedUnit, windDir)
-	// Show wind gust if available
-	if f.Currently.WindGust > 0 {
-		fmt.Fprintf(TW, formatValueWithUnit, "Wind Gust", f.Currently.WindGust, windSpeedUnit)
-	}
+	windStr := FormatWindString(f.Currently.WindSpeed, f.Currently.WindBearing, f.Currently.WindGust, windSpeedUnit, true)
+	fmt.Fprintf(TW, "Windspeed:\t%s\n", windStr)
 }
 
 // Prints precipitation probability.
@@ -338,12 +297,12 @@ func AirQualityIndex(f []air.Forecast) {
 func DailySummary(f weather.Forecast) {
 	// Calculate proper width for value column based on terminal size
 	maxWidth := calculateValueColumnWidth("Currently")
-	wrappedSummary := wrapTextForTabwriter(AddPeriod(f.Currently.Summary), maxWidth)
+	wrappedSummary := strings.Join(WrapText(AddPeriod(f.Currently.Summary), maxWidth), "\n\t")
 	fmt.Fprintf(TW, formatString, "Currently", wrappedSummary)
 
 	// Show detailed forecast if available
 	if f.Currently.DetailedForecast != "" {
-		wrappedDetails := wrapTextForTabwriter(AddPeriod(f.Currently.DetailedForecast), maxWidth)
+		wrappedDetails := strings.Join(WrapText(AddPeriod(f.Currently.DetailedForecast), maxWidth), "\n\t")
 		fmt.Fprintf(TW, formatString, "Details", wrappedDetails)
 	}
 }
@@ -352,7 +311,7 @@ func DailySummary(f weather.Forecast) {
 func WeeklySummary(f weather.Forecast) {
 	// Calculate proper width for value column based on terminal size
 	maxWidth := calculateValueColumnWidth("This week")
-	wrappedSummary := wrapTextForTabwriter(AddPeriod(f.Daily.Summary), maxWidth)
+	wrappedSummary := strings.Join(WrapText(AddPeriod(f.Daily.Summary), maxWidth), "\n\t")
 	fmt.Fprintf(TW, formatString, "This week", wrappedSummary)
 }
 
@@ -378,7 +337,7 @@ func WeatherAlerts(f weather.Forecast) {
 
 		// Wrap description instead of truncating
 		maxWidth := calculateValueColumnWidth("Details")
-		wrappedDescription := wrapTextForTabwriter(alert.Description, maxWidth)
+		wrappedDescription := strings.Join(WrapText(alert.Description, maxWidth), "\n\t")
 		fmt.Fprintf(TW, "Details:\t%s\n", wrappedDescription)
 	}
 	TW.Flush()

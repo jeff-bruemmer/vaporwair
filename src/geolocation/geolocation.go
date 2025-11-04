@@ -38,19 +38,10 @@ type GeoData struct {
 const IPAPIAddress = "https://ip-api.com/json"
 const ZipCodeAPIAddress = "https://api.zippopotam.us/us/"
 
-// trimCoordinates drops trailing zeroes following
-// conversion of coordinates from float64 to string
+// trimCoordinates drops trailing zeroes from coordinate strings
 func trimCoordinates(c string) string {
-	slice := strings.Split(c, "")
-	for i := len(slice) - 1; i > 0; i-- {
-		n := slice[i]
-		if n == "0" {
-			slice = slice[:i]
-		} else {
-			break
-		}
-	}
-	return strings.Join(slice, "")
+	c = strings.TrimRight(c, "0")
+	return strings.TrimRight(c, ".")
 }
 
 func FormatCoordinates(gd GeoData) Coordinates {

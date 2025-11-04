@@ -2,10 +2,12 @@ package air
 
 import (
 	"encoding/json"
-	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 )
 
 const exLatitude = "34.0308"
@@ -28,18 +30,9 @@ func TestBuildAirNowURL(t *testing.T) {
 	}
 
 	// Verify HTTPS is used
-	if !contains(got, "https://") {
+	if !strings.Contains(got, "https://") {
 		t.Error("Expected HTTPS URL, got HTTP")
 	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // getSampleAirNowResponse returns sample AirNow API forecast data

@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jeff-bruemmer/vaporwair/src/air"
@@ -67,7 +68,7 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 		if alert.Description != "" {
 			fmt.Println()
 			maxWidth := calculateValueColumnWidth("Description")
-			wrappedDescription := wrapTextForTabwriter(alert.Description, maxWidth)
+			wrappedDescription := strings.Join(WrapText(alert.Description, maxWidth), "\n\t")
 			fmt.Fprintf(TW, "Description:\t%s\n", wrappedDescription)
 			TW.Flush()
 		}

@@ -22,19 +22,7 @@ pressure: Hectopascals.
 visibility: Kilometers.
 */
 
-func digits(p float64) func(float64) float64 {
-	return func(v float64) float64 {
-		var rounded float64
-		pow := math.Pow(10, p)
-		d := pow * v
-		_, div := math.Modf(d)
-		if div >= 0.5 {
-			rounded = math.Ceil(d)
-		} else {
-			rounded = math.Floor(d)
-		}
-		return rounded / pow
-	}
+// Round rounds a float64 to the nearest integer value
+func Round(v float64) float64 {
+	return math.Round(v)
 }
-
-var Round = digits(0)

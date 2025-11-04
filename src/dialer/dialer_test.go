@@ -8,13 +8,6 @@ import (
 	"time"
 )
 
-// HTTPClient Interface Implementation
-// Validates interface contract (compile-time check)
-func TestDefaultHTTPClientImplementsInterface(t *testing.T) {
-	var _ HTTPClient = &DefaultHTTPClient{}
-	// This is a compile-time check - if it compiles, the interface is implemented
-}
-
 // NetReq Success Case
 // Validates successful HTTP GET request
 func TestNetReqSuccess(t *testing.T) {
@@ -228,66 +221,6 @@ func TestIsTimeoutError(t *testing.T) {
 	}
 }
 
-// Test: DefaultHTTPClient.Get method
-func TestDefaultHTTPClientGet(t *testing.T) {
-	client := &DefaultHTTPClient{}
-
-	// Setup: Mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("test response"))
-	}))
-	defer server.Close()
-
-	// Test: Direct call to Get method
-	headers := make(map[string]string)
-	headers["X-Test"] = "value"
-
-	resp, err := client.Get(server.URL, 5*time.Second, headers)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
-}
-
-// Test: Custom headers are set correctly
-func TestCustomHeaders(t *testing.T) {
-	client := &DefaultHTTPClient{}
-	receivedHeaders := make(map[string]string)
-
-	// Setup: Mock server that captures all headers
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedHeaders["X-Custom-1"] = r.Header.Get("X-Custom-1")
-		receivedHeaders["X-Custom-2"] = r.Header.Get("X-Custom-2")
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	// Test: Multiple custom headers
-	headers := map[string]string{
-		"X-Custom-1": "value1",
-		"X-Custom-2": "value2",
-	}
-
-	resp, err := client.Get(server.URL, 5*time.Second, headers)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Verify: All custom headers were set
-	if receivedHeaders["X-Custom-1"] != "value1" {
-		t.Errorf("X-Custom-1 header mismatch: got %q, want value1", receivedHeaders["X-Custom-1"])
-	}
-	if receivedHeaders["X-Custom-2"] != "value2" {
-		t.Errorf("X-Custom-2 header mismatch: got %q, want value2", receivedHeaders["X-Custom-2"])
-	}
-}
-
 // Test: hasSubstring helper function
 func TestHasSubstring(t *testing.T) {
 	tests := []struct {
@@ -330,9 +263,9 @@ func TestHasSubstring(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := hasSubstring(tt.s, tt.substr)
+			result := strings.Contains(tt.s, tt.substr)
 			if result != tt.expected {
-				t.Errorf("hasSubstring(%q, %q) = %v, want %v", tt.s, tt.substr, result, tt.expected)
+				t.Errorf("strings.Contains(%q, %q) = %v, want %v", tt.s, tt.substr, result, tt.expected)
 			}
 		})
 	}

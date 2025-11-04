@@ -335,12 +335,12 @@ func TestTrimCoordinates(t *testing.T) {
 		{
 			name:     "All zeros after decimal",
 			input:    "40.0000",
-			expected: "40.",
+			expected: "40",
 		},
 		{
 			name:     "Integer formatted as float",
-			input:    "40.0000000000", // strconv.FormatFloat always includes decimals
-			expected: "40.",
+			input:    "40.0000000000",
+			expected: "40",
 		},
 	}
 

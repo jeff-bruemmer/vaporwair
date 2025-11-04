@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jeff-bruemmer/vaporwair/src/air"
@@ -61,12 +62,8 @@ func WeatherDaily(w weather.Forecast, a []air.Forecast) {
 
 		// Wind information
 		if day.WindSpeed > 0 {
-			windDir := DegreesToCardinal(day.WindBearing)
-			fmt.Fprintf(TW, "Wind:\t%.0f %s from %s\n",
-				day.WindSpeed, windSpeedUnit, windDir)
-		}
-		if day.WindGust > 0 {
-			fmt.Fprintf(TW, formatValueWithUnit, "Wind Gust", day.WindGust, windSpeedUnit)
+			windStr := FormatWindString(day.WindSpeed, day.WindBearing, day.WindGust, windSpeedUnit, true)
+			fmt.Fprintf(TW, "Wind:\t%s\n", windStr)
 		}
 
 		// Humidity and dewpoint
@@ -91,12 +88,12 @@ func WeatherDaily(w weather.Forecast, a []air.Forecast) {
 		// Detailed forecast
 		if day.DetailedForecast != "" {
 			maxWidth := calculateValueColumnWidth("Forecast")
-			wrappedForecast := wrapTextForTabwriter(AddPeriod(day.DetailedForecast), maxWidth)
+			wrappedForecast := strings.Join(WrapText(AddPeriod(day.DetailedForecast), maxWidth), "\n\t")
 			fmt.Fprintf(TW, formatString, "Forecast", wrappedForecast)
 			TW.Flush()
 		} else if day.Summary != "" {
 			maxWidth := calculateValueColumnWidth("Summary")
-			wrappedSummary := wrapTextForTabwriter(AddPeriod(day.Summary), maxWidth)
+			wrappedSummary := strings.Join(WrapText(AddPeriod(day.Summary), maxWidth), "\n\t")
 			fmt.Fprintf(TW, formatString, "Summary", wrappedSummary)
 			TW.Flush()
 		}

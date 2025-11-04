@@ -16,28 +16,17 @@ import (
 	"time"
 )
 
-// Application configuration constants for caching and storage.
-//
-// Caching Strategy:
-// Vaporwair uses optimistic caching to reduce API calls and improve response times.
-// Forecasts are cached to disk with metadata (timestamp, coordinates) and served
-// from cache when:
-//   - Less than CacheTimeoutMinutes have elapsed since last fetch
-//   - User location hasn't changed
-//
-// This approach assumes weather forecasts don't change frequently enough to
-// warrant fetching fresh data on every request within the timeout window.
+// Application configuration and caching constants.
 const (
 	VaporwairDir           = "/.vaporwair/"
 	SavedWeatherFileName   = VaporwairDir + "weather-forecast.json"
 	SavedAirFileName       = VaporwairDir + "air-forecast.json"
 	ConfigFileName         = VaporwairDir + "config.json"
 	SavedCallFileName      = VaporwairDir + "last-call.json"
-	CacheTimeoutMinutes    = 5  // How long cached forecasts remain valid
+	CacheTimeoutMinutes    = 5
 )
 
-// Config stores API keys and application settings.
-// Note: NOAA API does not require an API key.
+// Config stores API keys and settings (NOAA doesn't require an API key).
 type Config struct {
 	AirNowAPIKey   string `json:"airnowapikey"`
 	DefaultZipCode string `json:"defaultzipcode,omitempty"`
@@ -102,18 +91,10 @@ func Exists(path string) (bool, error) {
 	return true, err
 }
 
-// Creates a directory to cache forecasts and call data
-// if that directory does not already exist.
+// CreateVaporwairDir creates a directory to cache forecasts and call data.
+// Uses os.MkdirAll which is idempotent - safe to call even if directory exists.
 func CreateVaporwairDir(path string) {
-	d, err := Exists(path)
-	if err != nil {
-		fmt.Println("There was a problem identifying Vaporwair directory.")
-	}
-	if d {
-		return
-	} else {
-		os.Mkdir(path, 0755)
-	}
+	os.MkdirAll(path, 0755)
 }
 
 // Loads previous weather forecast.
@@ -270,29 +251,29 @@ func SaveCall(path string, info APICallInfo) error {
 	return nil
 }
 
-func SaveWeatherForecast(path string, f weather.Forecast) bool {
-	c, err := json.Marshal(f)
+// saveJSON marshals data to JSON and saves it to a file.
+// Returns error if marshalling or writing fails.
+func saveJSON(path string, data any, perm os.FileMode) error {
+	content, err := json.Marshal(data)
 	if err != nil {
-		fmt.Println("Error marshalling weather forecast before saving.\n", err)
-		return false
+		return fmt.Errorf("error marshalling data: %w", err)
 	}
-	// Weather forecast is public data, 0644 is acceptable
-	err = os.WriteFile(path, c, 0644)
+	return os.WriteFile(path, content, perm)
+}
+
+func SaveWeatherForecast(path string, f weather.Forecast) bool {
+	err := saveJSON(path, f, 0644)
 	if err != nil {
+		fmt.Println(err)
 		return false
 	}
 	return true
 }
 
 func SaveAirForecast(path string, a []air.Forecast) bool {
-	c, err := json.Marshal(a)
+	err := saveJSON(path, a, 0644)
 	if err != nil {
-		fmt.Println("Error marshalling air forecast before saving.\n", err)
-		return false
-	}
-	// Air quality forecast is public data, 0644 is acceptable
-	err = os.WriteFile(path, c, 0644)
-	if err != nil {
+		fmt.Println(err)
 		return false
 	}
 	return true
