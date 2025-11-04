@@ -16,7 +16,9 @@ import (
 
 // Flags
 var weatherHourly bool
+var weatherDaily bool
 var weatherWeek bool
+var weatherAlerts bool
 var airQuality bool
 var clothingReport bool
 var insightsReport bool
@@ -37,14 +39,16 @@ func isValid(t time.Time, timeout float64) bool {
 // It listens on the done channel and stops when signaled.
 // Returns the original timestamp via the result channel.
 func Spinner(startTime time.Time, done chan bool, result chan time.Time) {
-	const barWidth = 75
+	// Use terminal width for the bar, accounting for brackets []
+	terminalWidth := report.GetTerminalWidth()
+	barWidth := max(terminalWidth-2, 10) // Minimum width for very narrow terminals
 	maxIterations := 600 // 60 seconds timeout (600 * 100ms)
 
 	for i := 0; i <= maxIterations; i++ {
 		select {
 		case <-done:
 			// Clear the line and exit
-			fmt.Printf("\r%s\r", strings.Repeat(" ", barWidth+2))
+			fmt.Printf("\r%s\r", strings.Repeat(" ", terminalWidth))
 			result <- startTime
 			return
 		default:
@@ -52,7 +56,7 @@ func Spinner(startTime time.Time, done chan bool, result chan time.Time) {
 
 			// Build the spinner bar with random population
 			bar := make([]rune, barWidth)
-			for j := 0; j < barWidth; j++ {
+			for j := range barWidth {
 				// Randomly populate approximately 30% of the bar
 				if time.Now().UnixNano()%(int64(j+1)*3) == 0 {
 					bar[j] = '█'
@@ -65,7 +69,7 @@ func Spinner(startTime time.Time, done chan bool, result chan time.Time) {
 
 			// Timeout after max iterations
 			if i == maxIterations {
-				fmt.Printf("\r%s\r", strings.Repeat(" ", barWidth+2))
+				fmt.Printf("\r%s\r", strings.Repeat(" ", terminalWidth))
 				log.Fatal("Request timed out after 60 seconds. The weather service may be unavailable.")
 			}
 		}
@@ -90,8 +94,12 @@ func RunReports(f weather.Forecast, a []air.Forecast) {
 	switch {
 	case weatherHourly:
 		report.WeatherHourly(f, a)
+	case weatherDaily:
+		report.WeatherDaily(f, a)
 	case weatherWeek:
 		report.WeatherWeek(f, a)
+	case weatherAlerts:
+		report.WeatherAlertsReport(f, a)
 	case airQuality:
 		report.AirQuality(f, a)
 	case clothingReport:
@@ -196,8 +204,10 @@ func init() {
 		fmt.Fprintf(os.Stderr, "\nWithout any flags, vaporwair displays the insights report (comparative analysis & weather recommendations).\n")
 	}
 
-	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour.")
+	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour with detailed conditions.")
+	flag.BoolVar(&weatherDaily, "d", false, "Prints comprehensive daily forecast with all NOAA fields.")
 	flag.BoolVar(&weatherWeek, "w", false, "Prints daily weather forecast for the next week.")
+	flag.BoolVar(&weatherAlerts, "alerts", false, "Prints active weather alerts and warnings.")
 	flag.BoolVar(&airQuality, "a", false, "Prints air quality forecast.")
 	flag.BoolVar(&clothingReport, "c", false, "Prints clothing recommendations based on weather (what to wair).")
 	flag.BoolVar(&insightsReport, "i", false, "Prints comparative analysis and time-based insights.")

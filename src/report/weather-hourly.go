@@ -8,11 +8,15 @@ import (
 
 func WeatherHourly(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Hourly Summary"))
-	fmt.Println(AddPeriod(w.Hourly.Summary))
-	fmt.Println()
-	format := "%v\t%.0f %s\t%.0f %s\t%.0f %s\t%s\n"
-	fmt.Fprintf(TW, "Period\tTemp\tPrecip\tWind\tGust\n")
-	fmt.Fprintf(TW, "------\t----\t------\t----\t----\n")
+	if w.Hourly.Summary != "" {
+		fmt.Println(AddPeriod(w.Hourly.Summary))
+		fmt.Println()
+	}
+
+	// Enhanced hourly table with additional NOAA fields
+	format := "%v\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%s\n"
+	fmt.Fprintf(TW, "Period\tTemp\tFeels\tDewpoint\tPrecip\tHumidity\tWind\tGust\n")
+	fmt.Fprintf(TW, "------\t----\t-----\t--------\t------\t--------\t----\t----\n")
 	d := LimitData(w.Hourly.Data, 12)
 	for _, h := range d {
 		gustStr := "-"
@@ -24,10 +28,20 @@ func WeatherHourly(w weather.Forecast, a []air.Forecast) {
 		if periodLabel == "" {
 			periodLabel = FormatTime(h.Time)
 		}
+
+		// Calculate feels like temperature
+		feelsLike := h.ApparentTemperature
+		if feelsLike == 0 {
+			feelsLike = h.Temperature
+		}
+
 		fmt.Fprintf(TW, format,
 			periodLabel,
 			h.Temperature, temperatureUnit,
+			feelsLike, temperatureUnit,
+			h.DewPoint, temperatureUnit,
 			ToPercent(h.PrecipProbability), percentUnit,
+			ToPercent(h.Humidity), percentUnit,
 			h.WindSpeed, windSpeedUnit,
 			gustStr)
 	}

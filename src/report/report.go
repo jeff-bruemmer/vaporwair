@@ -42,12 +42,12 @@ var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags
 var HeadingWidth = GetTerminalWidth()
 
 // Format strings for tabwriter output
-var formatValueWithTime = "%s:\t%.0f %s at %v %s\n"      // e.g., "Min Temperature: 33 °F at 19:00 HH:MM"
-var formatValueWithUnit = "%s:\t%.0f %s\n"               // e.g., "Humidity: 83 %"
-var formatLabelValue = "%s:\t%v %s\n"                    // e.g., "Sunrise: 06:15 HH:MM"
-var formatMultipleValues = "%s:\t%v %s %s\n"             // e.g., "Air Quality Index: 55 O3 Moderate"
-var formatString = "%s:\t%s\n"                           // e.g., "Currently: Mostly Cloudy"
-var formatNumber = "%s:\t%v\n"                           // e.g., "UV Index: 0"
+var formatValueWithTime = "%s:\t%.0f %s at %v %s\n" // e.g., "Min Temperature: 33 °F at 19:00 HH:MM"
+var formatValueWithUnit = "%s:\t%.0f %s\n"          // e.g., "Humidity: 83 %"
+var formatLabelValue = "%s:\t%v %s\n"               // e.g., "Sunrise: 06:15 HH:MM"
+var formatMultipleValues = "%s:\t%v %s %s\n"        // e.g., "Air Quality Index: 55 O3 Moderate"
+var formatString = "%s:\t%s\n"                      // e.g., "Currently: Mostly Cloudy"
+var formatNumber = "%s:\t%v\n"                      // e.g., "UV Index: 0"
 
 // winsize struct for terminal size detection
 type winsize struct {

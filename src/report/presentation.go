@@ -42,11 +42,11 @@ func (vm ForecastViewModel) GetCurrentConditions() CurrentConditions {
 
 // DailyConditions provides a structured view of daily forecast data.
 type DailyConditions struct {
-	TemperatureMin   float64
-	TemperatureMax   float64
+	TemperatureMin    float64
+	TemperatureMax    float64
 	PrecipProbability float64
-	PrecipType       string
-	Summary          string
+	PrecipType        string
+	Summary           string
 }
 
 // GetTodayConditions extracts and organizes today's forecast data.
@@ -57,11 +57,11 @@ func (vm ForecastViewModel) GetTodayConditions() DailyConditions {
 
 	today := vm.Weather.Daily.Data[0]
 	return DailyConditions{
-		TemperatureMin:   today.TemperatureMin,
-		TemperatureMax:   today.TemperatureMax,
+		TemperatureMin:    today.TemperatureMin,
+		TemperatureMax:    today.TemperatureMax,
 		PrecipProbability: today.PrecipProbability,
-		PrecipType:       today.PrecipType,
-		Summary:          vm.Weather.Daily.Summary,
+		PrecipType:        today.PrecipType,
+		Summary:           vm.Weather.Daily.Summary,
 	}
 }
 

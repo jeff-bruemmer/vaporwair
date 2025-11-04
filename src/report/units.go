@@ -46,7 +46,6 @@ var PressureUnit = selectUnit("atm", "atm") // selectUnit("hPa", "atm")
 
 var precision = 0
 
-
 func digits(p float64) func(float64) float64 {
 	return func(v float64) float64 {
 		var rounded float64

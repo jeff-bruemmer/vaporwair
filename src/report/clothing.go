@@ -2,9 +2,10 @@ package report
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
-	"strings"
 )
 
 // ClothingRecommendation represents a suggested outfit and accessories.
@@ -16,26 +17,14 @@ type ClothingRecommendation struct {
 
 // getBaseOutfit returns clothing recommendations based on temperature.
 func getBaseOutfit(temp float64) string {
-	switch {
-	case temp >= 85:
-		return "Light, breathable clothing (shorts, t-shirt, tank top)"
-	case temp >= 75:
-		return "Summer wear (shorts or light pants, short sleeves)"
-	case temp >= 65:
-		return "Light layers (jeans, long sleeves or light sweater)"
-	case temp >= 55:
-		return "Moderate layers (pants, sweater or light jacket)"
-	case temp >= 45:
-		return "Warm layers (jacket, long sleeves, jeans)"
-	case temp >= 35:
-		return "Heavy jacket or coat with layers underneath"
-	case temp >= 25:
-		return "Winter coat, insulated layers, thermal wear"
-	case temp >= 15:
-		return "Heavy winter coat, multiple layers, thermal underwear"
-	default:
-		return "Extreme cold gear, heavy insulation, thermal base layers"
+	tempInt := int(temp)
+	for _, level := range OutfitLevels {
+		if tempInt >= level.MinTemp && tempInt <= level.MaxTemp {
+			return level.Outfit
+		}
 	}
+	// Fallback to extreme cold if somehow no match
+	return OutfitDescExtremeCold
 }
 
 // GetClothingRecommendation analyzes weather and returns clothing suggestions.
@@ -225,32 +214,102 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println()
 
 	rec := GetClothingRecommendationWithAir(w, a)
+	daily := w.Daily.Data[0]
+
+	// Find the most current hourly data point (closest to now)
+	current := GetCurrentHourlyData(w)
 
 	// Temperature summary
-	daily := w.Daily.Data[0]
-	fmt.Fprintf(TW, "Temperature Range:\t%.0f°F - %.0f°F\n", daily.TemperatureMin, daily.TemperatureMax)
-	fmt.Fprintf(TW, "Current:\t%.0f°F\n", w.Currently.Temperature)
-	fmt.Println()
+	fmt.Fprintf(TW, "Current:\t%.0f°F\n", current.Temperature)
+	fmt.Fprintf(TW, "Today's Range:\t%.0f°F - %.0f°F\n", daily.TemperatureMin, daily.TemperatureMax)
+	fmt.Fprintf(TW, "Temp Range\tOutfit Type\n")
+	fmt.Fprintf(TW, "----------\t-----------\n")
 
-	// Base outfit
-	fmt.Fprintf(TW, "Recommended Outfit:\n")
-	fmt.Fprintf(TW, "\t%s\n", rec.Outfit)
+	currentTemp := int(current.Temperature)
+
+	for _, level := range OutfitLevels {
+		// Check if this is the recommended outfit for current temp or high temp
+		indicator := "  "
+		if currentTemp >= level.MinTemp && currentTemp <= level.MaxTemp {
+			indicator = "→ "
+		}
+
+		// Format temp range
+		var tempRange string
+		if level.MaxTemp >= 999 {
+			tempRange = fmt.Sprintf("%d°F+", level.MinTemp)
+		} else {
+			tempRange = fmt.Sprintf("%d-%d°F", level.MinTemp, level.MaxTemp)
+		}
+
+		fmt.Fprintf(TW, "%s%s\t%s\n", indicator, tempRange, level.Outfit)
+	}
+	TW.Flush()
 	fmt.Println()
 
 	// Accessories
 	if len(rec.Accessories) > 0 {
-		fmt.Fprintf(TW, "Accessories:\n")
+		fmt.Fprintf(TW, "Accessories to bring:\n")
 		for _, accessory := range rec.Accessories {
 			fmt.Fprintf(TW, "\t• %s\n", accessory)
 		}
 		fmt.Println()
 	}
 
-	// Additional notes
-	if len(rec.Notes) > 0 {
-		fmt.Fprintf(TW, "Additional Tips:\n")
-		for _, note := range rec.Notes {
-			// Wrap long notes to 70 characters
+	// Precipitation forecast
+	fmt.Println()
+	fmt.Println(Title("Precipitation"))
+
+	// Check daily precipitation
+	if daily.PrecipProbability > 0 {
+		precipType := "precipitation"
+		if daily.PrecipType != "" {
+			precipType = daily.PrecipType
+		}
+		fmt.Fprintf(TW, "Today:\t%.0f%% chance of %s\n", ToPercent(daily.PrecipProbability), precipType)
+
+		// Find hours with highest precipitation probability
+		type PrecipHour struct {
+			time       string
+			prob       float64
+			precipType string
+		}
+		var highPrecipHours []PrecipHour
+
+		// Safely slice hourly data to check next 12 hours
+		hoursToCheck := SafeSliceHourly(w.Hourly.Data, DefaultHourlyLimit)
+		for _, hour := range hoursToCheck {
+			if hour.PrecipProbability >= PrecipSignificantThreshold {
+				timeStr := hour.PeriodName
+				if timeStr == "" {
+					timeStr = FormatTime(hour.Time)
+				}
+				pType := "precip"
+				if hour.PrecipType != "" {
+					pType = hour.PrecipType
+				}
+				highPrecipHours = append(highPrecipHours, PrecipHour{
+					time:       timeStr,
+					prob:       hour.PrecipProbability,
+					precipType: pType,
+				})
+			}
+		}
+
+		if len(highPrecipHours) > 0 {
+			fmt.Fprintf(TW, "Peak times:\n")
+			for _, ph := range highPrecipHours {
+				fmt.Fprintf(TW, "  %-8s  %.0f%% %s\n", ph.time, ToPercent(ph.prob), ph.precipType)
+			}
+		}
+	} else {
+		fmt.Fprintf(TW, "No precipitation expected today\n")
+	}
+
+	// Other important tips (not precipitation related)
+	for _, note := range rec.Notes {
+		// Skip precipitation-related notes since we handle those above
+		if !IsPrecipitationNote(note) {
 			wrapped := wrapText(note, 70)
 			for i, line := range wrapped {
 				if i == 0 {

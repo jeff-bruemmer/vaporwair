@@ -2,13 +2,14 @@ package report
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
-	"time"
 )
 
 func WeatherWeek(w weather.Forecast, a []air.Forecast) {
-	fmt.Println(Title("Weekly Summary"))
+	fmt.Println(Title("Today's summary"))
 	fmt.Println(AddPeriod(w.Daily.Summary))
 	fmt.Println(Separator)
 	data := LimitData(w.Daily.Data, 7)
