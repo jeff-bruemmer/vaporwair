@@ -38,15 +38,7 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 	}
 
 	// Temperature with feels like
-	actual := Round(current.Temperature)
-	feelsLike := Round(current.ApparentTemperature)
-	diff := feelsLike - actual
-	if diff > FeelsLikeDiffThreshold || diff < -FeelsLikeDiffThreshold {
-		fmt.Fprintf(tw, "Temperature:\t%.0f %s (feels like %.0f %s)\n",
-			actual, temperatureUnit, feelsLike, temperatureUnit)
-	} else {
-		fmt.Fprintf(tw, formatValueWithUnit, "Temperature", actual, temperatureUnit)
-	}
+	FormatTemperatureWithFeelsLike(tw, "Temperature", Round(current.Temperature), Round(current.ApparentTemperature), temperatureUnit)
 
 	fmt.Fprintf(tw, formatValueWithUnit, "Today's High", daily.TemperatureMax, temperatureUnit)
 	fmt.Fprintf(tw, formatValueWithUnit, "Today's Low", Round(daily.TemperatureMin), temperatureUnit)
@@ -87,25 +79,7 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 
 	// Air Quality
 	if len(a) > 0 {
-		today := a[0].DateForecast
-		aqi := -1
-		var particle string
-		var category string
-
-		for _, measurement := range a {
-			if measurement.DateForecast != today {
-				break
-			}
-			if measurement.AQI < 0 {
-				continue
-			}
-			if measurement.AQI > aqi {
-				aqi = measurement.AQI
-				particle = measurement.ParameterName
-				category = measurement.Category.Name
-			}
-		}
-
+		aqi, particle, category := GetHighestAQIForToday(a)
 		if aqi >= 0 {
 			fmt.Fprintf(tw, "Air Quality:\t%d AQI (%s) - %s\n", aqi, particle, category)
 		}

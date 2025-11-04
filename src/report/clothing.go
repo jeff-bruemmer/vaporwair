@@ -128,24 +128,7 @@ func GetClothingRecommendationWithAir(f weather.Forecast, a []air.Forecast) Clot
 	}
 
 	// Find highest AQI for today
-	today := a[0].DateForecast
-	aqi := -1
-	var particle string
-	var category string
-
-	for _, measurement := range a {
-		if measurement.DateForecast != today {
-			break
-		}
-		if measurement.AQI < 0 {
-			continue
-		}
-		if measurement.AQI > aqi {
-			aqi = measurement.AQI
-			particle = measurement.ParameterName
-			category = measurement.Category.Name
-		}
-	}
+	aqi, particle, category := GetHighestAQIForToday(a)
 
 	if aqi < 0 {
 		return rec // No valid air quality data

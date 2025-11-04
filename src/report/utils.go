@@ -1,9 +1,12 @@
 package report
 
 import (
+	"fmt"
 	"strings"
+	"text/tabwriter"
 	"time"
 
+	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 )
 
@@ -90,4 +93,43 @@ func IsPrecipitationNote(note string) bool {
 	}
 
 	return false
+}
+
+// FormatTemperatureWithFeelsLike prints temperature with "feels like" if the difference exceeds threshold.
+// Uses FeelsLikeDiffThreshold (3°F) to determine when to show the "feels like" temperature.
+func FormatTemperatureWithFeelsLike(tw *tabwriter.Writer, label string, actual, feelsLike float64, unit string) {
+	diff := feelsLike - actual
+	if diff > FeelsLikeDiffThreshold || diff < -FeelsLikeDiffThreshold {
+		fmt.Fprintf(tw, "%s:\t%.0f %s (feels like %.0f %s)\n", label, actual, unit, feelsLike, unit)
+	} else {
+		fmt.Fprintf(tw, "%s:\t%.0f %s\n", label, actual, unit)
+	}
+}
+
+// GetHighestAQIForToday finds the maximum AQI value from today's air quality forecasts.
+// Returns the AQI value, pollutant particle name, and category description.
+// Returns (-1, "", "") if no valid data is available.
+func GetHighestAQIForToday(a []air.Forecast) (aqi int, particle, category string) {
+	if len(a) == 0 {
+		return -1, "", ""
+	}
+
+	today := a[0].DateForecast
+	aqi = -1
+
+	for _, measurement := range a {
+		if measurement.DateForecast != today {
+			break
+		}
+		if measurement.AQI < 0 {
+			continue
+		}
+		if measurement.AQI > aqi {
+			aqi = measurement.AQI
+			particle = measurement.ParameterName
+			category = measurement.Category.Name
+		}
+	}
+
+	return aqi, particle, category
 }

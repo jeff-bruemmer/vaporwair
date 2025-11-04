@@ -6,7 +6,6 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 	"os"
-	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -199,17 +198,6 @@ func SetHeadingWidthFromContent(contentGenerator func(*tabwriter.Writer)) {
 	}
 }
 
-// Pad adds leading spaces to align numbers to 4 characters width.
-func Pad(v int) string {
-	s := strconv.Itoa(v)
-	var b []string
-	for i := len(s); i < 4; i++ {
-		b = append(b, " ")
-	}
-	b = append(b, s)
-	return strings.Join(b, "")
-}
-
 // Adds period to end of string if one is not present.
 func AddPeriod(s string) string {
 	if strings.LastIndex(s, ".") != len(s)-1 {
@@ -254,17 +242,7 @@ func MaxTemp(f weather.Forecast) {
 // Prints minimum daily temperature and time.
 func CurrentTemp(f weather.Forecast) {
 	current := f.Hourly.Data[0]
-	actual := Round(current.Temperature)
-	feelsLike := Round(current.ApparentTemperature)
-
-	// Only show "feels like" if it differs significantly from actual (>3 degrees)
-	diff := feelsLike - actual
-	if diff > 3 || diff < -3 {
-		fmt.Fprintf(TW, "Current Temperature:\t%.0f %s (feels like %.0f %s)\n",
-			actual, temperatureUnit, feelsLike, temperatureUnit)
-	} else {
-		fmt.Fprintf(TW, formatValueWithUnit, "Current Temperature", actual, temperatureUnit)
-	}
+	FormatTemperatureWithFeelsLike(TW, "Current Temperature", Round(current.Temperature), Round(current.ApparentTemperature), temperatureUnit)
 }
 
 // Prints humidity converted to percent.
@@ -323,34 +301,20 @@ func AirQualityIndex(f []air.Forecast) {
 		return
 	}
 
-	today := f[0].DateForecast
-	aqi := -1 // Initialize to -1 to detect if we found any valid AQI values
-	var particle string
-	var category string
-	var categoryOnly string // For when AQI is unavailable but category is
+	aqi, particle, category := GetHighestAQIForToday(f)
 
-	for _, measurement := range f {
-		// We are only interested in the highest AQI for today.
-		if measurement.DateForecast != today {
-			break
-		}
-
-		// Even if AQI is -1, capture category information
-		if measurement.Category.Name != "" && categoryOnly == "" {
-			categoryOnly = measurement.Category.Name
-		}
-
-		// Skip measurements with invalid AQI values (AirNow returns -1 for unavailable forecasts)
-		if measurement.AQI < 0 {
-			continue
-		}
-
-		// If that measurement exceeds that of the other reigning particle,
-		// a new pollutant is crowned.
-		if measurement.AQI > aqi {
-			aqi = measurement.AQI
-			particle = measurement.ParameterName
-			category = measurement.Category.Name
+	// Capture category information even if AQI is unavailable
+	var categoryOnly string
+	if aqi < 0 {
+		today := f[0].DateForecast
+		for _, measurement := range f {
+			if measurement.DateForecast != today {
+				break
+			}
+			if measurement.Category.Name != "" {
+				categoryOnly = measurement.Category.Name
+				break
+			}
 		}
 	}
 
