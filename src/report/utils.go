@@ -5,6 +5,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
@@ -102,9 +103,9 @@ func FormatTemperatureString(actual, feelsLike float64, unit string) string {
 func FormatTemperatureWithFeelsLike(tw *tabwriter.Writer, label string, actual, feelsLike float64, unit string) {
 	diff := feelsLike - actual
 	if diff > FeelsLikeDiffThreshold || diff < -FeelsLikeDiffThreshold {
-		fmt.Fprintf(tw, "%s:\t%.0f %s (feels like %.0f %s)\n", label, actual, unit, feelsLike, unit)
+		fmt.Fprintf(tw, "%s:\t%.0f%s (feels like %.0f%s)\n", label, actual, unit, feelsLike, unit)
 	} else {
-		fmt.Fprintf(tw, "%s:\t%.0f %s\n", label, actual, unit)
+		fmt.Fprintf(tw, "%s:\t%.0f%s\n", label, actual, unit)
 	}
 }
 
@@ -137,9 +138,10 @@ func GetHighestAQIForToday(a []air.Forecast) (aqi int, particle, category string
 }
 
 // WrapText wraps text to specified width, breaking on word boundaries.
+// Width is measured in runes so multi-byte characters like ° count as one column.
 // Returns a slice of strings, one for each line.
 func WrapText(text string, width int) []string {
-	if len(text) <= width {
+	if utf8.RuneCountInString(text) <= width {
 		return []string{text}
 	}
 
@@ -150,7 +152,7 @@ func WrapText(text string, width int) []string {
 	for _, word := range words {
 		if currentLine == "" {
 			currentLine = word
-		} else if len(currentLine)+1+len(word) <= width {
+		} else if utf8.RuneCountInString(currentLine)+1+utf8.RuneCountInString(word) <= width {
 			currentLine += " " + word
 		} else {
 			lines = append(lines, currentLine)
@@ -188,4 +190,54 @@ func DegreesToCardinal(degrees float64) string {
 	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
 	index := int((degrees + 11.25) / 22.5)
 	return directions[index%16]
+}
+
+// LabeledText is one labeled section of a longer piece of text.
+type LabeledText struct {
+	Label string
+	Text  string
+}
+
+// ParseNWSDescription splits an NWS alert description of the form
+// "* WHAT...text * WHERE...text" into labeled sections ("What", "Where").
+// Returns nil if the description doesn't follow that structure.
+func ParseNWSDescription(desc string) []LabeledText {
+	normalized := strings.Join(strings.Fields(desc), " ")
+	if !strings.HasPrefix(normalized, "* ") {
+		return nil
+	}
+
+	var sections []LabeledText
+	for _, part := range strings.Split(normalized[2:], " * ") {
+		label, text, ok := strings.Cut(part, "...")
+		if !ok || label == "" || label != strings.ToUpper(label) {
+			return nil
+		}
+		sections = append(sections, LabeledText{
+			Label: CapitalizeFirst(strings.ToLower(label)),
+			Text:  strings.TrimSpace(text),
+		})
+	}
+	return sections
+}
+
+// FormatUntil formats a future time as clock time with a relative offset, e.g. "Wed 05:00 (in 15h)".
+// The weekday is omitted when t falls on the same day as now.
+func FormatUntil(t, now time.Time) string {
+	clock := t.Format("15:04")
+	if t.YearDay() != now.YearDay() || t.Year() != now.Year() {
+		clock = t.Format("Mon 15:04")
+	}
+
+	d := t.Sub(now)
+	switch {
+	case d <= 0:
+		return clock
+	case d < time.Hour:
+		return fmt.Sprintf("%s (in %dm)", clock, int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%s (in %dh)", clock, int(d.Hours()))
+	default:
+		return fmt.Sprintf("%s (in %dd)", clock, int(d.Hours()/24))
+	}
 }

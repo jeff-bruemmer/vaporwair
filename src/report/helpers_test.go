@@ -231,3 +231,57 @@ func TestIsPrecipitationNote(t *testing.T) {
 		})
 	}
 }
+
+// TestParseNWSDescription tests splitting NWS alert text into labeled sections
+func TestParseNWSDescription(t *testing.T) {
+	desc := "* WHAT...Temperatures as low as 33 will result in frost\nformation.\n\n* WHERE...The Champlain Valley.\n\n* WHEN...From midnight tonight to 7 AM EDT Wednesday.\n\n* ADDITIONAL DETAILS...Cover plants."
+	got := ParseNWSDescription(desc)
+	want := []LabeledText{
+		{"What", "Temperatures as low as 33 will result in frost formation."},
+		{"Where", "The Champlain Valley."},
+		{"When", "From midnight tonight to 7 AM EDT Wednesday."},
+		{"Additional details", "Cover plants."},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("ParseNWSDescription() returned %d sections, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("section %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	for _, unstructured := range []string{"", "A plain description.", "* not uppercase...text"} {
+		if got := ParseNWSDescription(unstructured); got != nil {
+			t.Errorf("ParseNWSDescription(%q) = %+v, want nil", unstructured, got)
+		}
+	}
+}
+
+// TestWrapTextCountsRunes ensures multi-byte characters count as one column
+func TestWrapTextCountsRunes(t *testing.T) {
+	// 10 runes but 11 bytes because of the degree sign
+	if got := WrapText("High 55°F.", 10); len(got) != 1 {
+		t.Errorf("WrapText() = %q, want a single line", got)
+	}
+}
+
+// TestFormatUntil tests clock time with relative offsets
+func TestFormatUntil(t *testing.T) {
+	now := time.Date(2026, 10, 6, 14, 0, 0, 0, time.Local)
+	tests := []struct {
+		t    time.Time
+		want string
+	}{
+		{now.Add(30 * time.Minute), "14:30 (in 30m)"},
+		{now.Add(5 * time.Hour), "19:00 (in 5h)"},
+		{now.Add(15 * time.Hour), "Wed 05:00 (in 15h)"},
+		{now.Add(72 * time.Hour), "Fri 14:00 (in 3d)"},
+		{now.Add(-time.Hour), "13:00"},
+	}
+	for _, tt := range tests {
+		if got := FormatUntil(tt.t, now); got != tt.want {
+			t.Errorf("FormatUntil(%v) = %q, want %q", tt.t, got, tt.want)
+		}
+	}
+}

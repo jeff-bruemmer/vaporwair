@@ -27,6 +27,10 @@ var zipCode string
 var useCurrentLocation bool
 var refresh bool
 
+// notes collects non-fatal warnings raised while the spinner is running.
+// They're printed after the report so they don't garble the spinner line.
+var notes []string
+
 // isValid checks if cached forecast is still fresh (optimistic caching).
 func isValid(t time.Time, timeout float64) bool {
 	return time.Since(t).Minutes() < timeout
@@ -124,8 +128,7 @@ func GetCoordinates(appConfig storage.AppConfig) (geolocation.Coordinates, strin
 	if appConfig.Config.DefaultZipCode != "" {
 		geoData, err := geolocation.GetGeoDataFromZip(appConfig.Config.DefaultZipCode)
 		if err != nil {
-			fmt.Printf("Warning: Could not use default zip code %s: %v\n", appConfig.Config.DefaultZipCode, err)
-			fmt.Println("Falling back to IP-based location...")
+			notes = append(notes, fmt.Sprintf("Could not use default zip code %s (%v); used IP-based location", appConfig.Config.DefaultZipCode, err))
 			return geolocation.FormatCoordinates(getIPGeoData()), ""
 		}
 		return geolocation.FormatCoordinates(geoData), appConfig.Config.DefaultZipCode
@@ -147,11 +150,31 @@ func PrintBanner() {
 	fmt.Println(banner)
 }
 
-func PrintSpaceTime(t, t1 time.Time, c geolocation.Coordinates) {
-	fmt.Println(t.Format("Mon Jan 2 15:04:05 MST 2006"))
-	// Display location on two lines for better terminal width compatibility
-	fmt.Printf("%s, %s\n", c.City, c.Zip)
-	fmt.Printf("%s, %s\n", c.Latitude, c.Longitude)
+// PrintHeader prints a one-line header: location, time, and cache age when served from cache.
+// A zero cachedAt means the forecast was just fetched.
+func PrintHeader(t time.Time, c geolocation.Coordinates, cachedAt time.Time) {
+	parts := []string{}
+	if place := strings.TrimSpace(c.City + " " + c.Zip); place != "" {
+		parts = append(parts, report.Bold(place))
+	}
+	parts = append(parts, t.Format("Mon Jan 2, 15:04 MST"))
+	if !cachedAt.IsZero() {
+		age := t.Sub(cachedAt)
+		if age < time.Minute {
+			parts = append(parts, report.Dim("cached just now"))
+		} else {
+			parts = append(parts, report.Dim(fmt.Sprintf("cached %dm ago", int(age.Minutes()))))
+		}
+	}
+	fmt.Println(strings.Join(parts, " · "))
+	fmt.Println()
+}
+
+// PrintNotes prints any warnings collected while fetching, dimmed, after the report.
+func PrintNotes() {
+	for _, n := range notes {
+		fmt.Println(report.Dim("Note: " + n))
+	}
 }
 
 // SaveForecasts persists forecasts to disk with timestamp and coordinates.
@@ -223,7 +246,10 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 	go func() {
 		if config.AirNowAPIKey != "" && coords.Zip != "" {
 			anURL := air.BuildAirNowURL(air.AirNowAddress, coords.Zip, config.AirNowAPIKey)
-			forecast := air.GetForecast(anURL)
+			forecast, err := air.GetForecast(anURL)
+			if err != nil {
+				notes = append(notes, fmt.Sprintf("Air quality unavailable (AirNow: %v)", err))
+			}
 			airChan <- forecast
 		} else {
 			airChan <- []air.Forecast{}
@@ -255,22 +281,22 @@ func loadCachedForecasts(appConfig storage.AppConfig, t time.Time, spinnerDone c
 	}
 	pwf, err := storage.LoadSavedWeather(appConfig.HomeDir + storage.SavedWeatherFileName)
 	if err != nil {
-		fmt.Println("No previous weather forecast found.")
 		return false
 	}
 
 	paf, err := storage.LoadSavedAir(appConfig.HomeDir + storage.SavedAirFileName)
 	if err != nil {
-		fmt.Println("No previous air forecast found.")
+		notes = append(notes, "Air quality unavailable (no cached air forecast)")
 		paf = []air.Forecast{}
 	}
 
 	// Stop spinner and print results
 	spinnerDone <- true
-	t1 := <-spinnerResult
-	PrintSpaceTime(t, t1, pc.Coordinates)
+	<-spinnerResult
+	PrintHeader(t, pc.Coordinates, pc.Time)
 	RunReports(pwf, paf)
 	report.TW.Flush()
+	PrintNotes()
 
 	return true
 }
@@ -309,10 +335,11 @@ func main() {
 
 	// Stop spinner and display results
 	spinnerDone <- true
-	t1 := <-spinnerResult
-	PrintSpaceTime(t, t1, coordinates)
+	<-spinnerResult
+	PrintHeader(t, coordinates, time.Time{})
 	RunReports(wf, af)
 	report.TW.Flush()
+	PrintNotes()
 
 	// Save forecasts for future use
 	SaveForecasts(appConfig.HomeDir, coordinates, wf, af)

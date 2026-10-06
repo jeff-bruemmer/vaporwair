@@ -4,9 +4,9 @@ package air
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
 	"io"
-	"log"
 	"strings"
 )
 
@@ -69,32 +69,32 @@ func BuildAirNowURL(addr string, zipCode string, apiKey string) string {
 }
 
 // GetForecast dials the AirNow current forecast endpoint and returns a slice of Forecasts.
-// Returns an empty slice if no forecasts are available.
-func GetForecast(addr string) []Forecast {
+// Errors are returned rather than logged so the caller can report them after the spinner stops.
+func GetForecast(addr string) ([]Forecast, error) {
 	var af []apiForecast
 
 	resp, err := dialer.NetReq(addr, 10, false)
 	if err != nil {
-		log.Printf("Warning: AirNow API request failed: %v\n", err)
-		return []Forecast{}
+		return []Forecast{}, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		log.Printf("Warning: AirNow API returned status %d - air quality data unavailable: %s\n", resp.StatusCode, strings.TrimSpace(string(body)))
-		return []Forecast{}
+		if msg := strings.TrimSpace(string(body)); msg != "" {
+			return []Forecast{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, msg)
+		}
+		return []Forecast{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	err = json.NewDecoder(resp.Body).Decode(&af)
 	if err != nil {
-		log.Printf("Warning: Failed to decode AirNow response: %v\n", err)
-		return []Forecast{}
+		return []Forecast{}, fmt.Errorf("could not decode response: %w", err)
 	}
 
 	forecasts := make([]Forecast, 0, len(af))
 	for _, f := range af {
 		forecasts = append(forecasts, f.toForecast())
 	}
-	return forecasts
+	return forecasts, nil
 }

@@ -50,7 +50,10 @@ func TestGetForecast_WithMockServer(t *testing.T) {
 	defer server.Close()
 
 	// Call GetForecast with the mock server URL
-	forecasts := GetForecast(server.URL)
+	forecasts, err := GetForecast(server.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify we got the expected number of forecasts
 	if len(forecasts) != 3 {
@@ -94,7 +97,10 @@ func TestGetForecast_EmptyResponse(t *testing.T) {
 	defer server.Close()
 
 	// Call GetForecast with the mock server URL
-	forecasts := GetForecast(server.URL)
+	forecasts, err := GetForecast(server.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify we got an empty slice
 	if len(forecasts) != 0 {
@@ -111,7 +117,10 @@ func TestGetForecast_NullResponse(t *testing.T) {
 	defer server.Close()
 
 	// Call GetForecast with the mock server URL
-	forecasts := GetForecast(server.URL)
+	forecasts, err := GetForecast(server.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify we got an empty slice (not nil)
 	if forecasts == nil {
@@ -156,7 +165,10 @@ func TestAirQualityIntegration(t *testing.T) {
 	url := BuildAirNowURL(testAddr, coords.Zip, "test-key")
 
 	// Get forecast
-	forecasts := GetForecast(url)
+	forecasts, err := GetForecast(url)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify we got data
 	if len(forecasts) == 0 {
@@ -202,5 +214,21 @@ func TestHandlingUnavailableForecasts(t *testing.T) {
 	// Should have no valid forecasts
 	if len(validForecasts) != 0 {
 		t.Errorf("Expected 0 valid forecasts when all AQI=-1, got %d", len(validForecasts))
+	}
+}
+
+// TestGetForecast_HTTPError verifies non-200 responses surface as errors.
+func TestGetForecast_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGone)
+	}))
+	defer server.Close()
+
+	forecasts, err := GetForecast(server.URL)
+	if err == nil || err.Error() != "HTTP 410" {
+		t.Errorf("Expected error \"HTTP 410\", got %v", err)
+	}
+	if len(forecasts) != 0 {
+		t.Errorf("Expected 0 forecasts on error, got %d", len(forecasts))
 	}
 }

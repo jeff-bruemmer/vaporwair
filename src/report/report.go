@@ -1,7 +1,6 @@
 package report
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
@@ -10,6 +9,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 )
 
@@ -37,8 +37,11 @@ var Separator = "+++"
 
 var TW = tabwriter.NewWriter(output, minwidth, tabwidth, padding, padchar, flags)
 
-// HeadingWidth is set dynamically based on terminal width or content
-var HeadingWidth = GetTerminalWidth()
+// MaxReportWidth caps line length so reports stay readable on wide terminals.
+const MaxReportWidth = 80
+
+// ReportWidth is the width every section title and wrapped paragraph shares.
+var ReportWidth = min(GetTerminalWidth(), MaxReportWidth)
 
 // Format strings for tabwriter output
 var formatValueWithTime = "%s:\t%.0f %s at %v %s\n" // e.g., "Min Temperature: 33 °F at 19:00 HH:MM"
@@ -65,8 +68,8 @@ func GetTerminalWidth() int {
 		uintptr(syscall.TIOCGWINSZ),
 		uintptr(unsafe.Pointer(ws)))
 
-	if int(retCode) == -1 {
-		// Fallback to 80 columns if detection fails
+	if int(retCode) == -1 || ws.Col == 0 {
+		// Fallback to 80 columns if detection fails (e.g. output is piped)
 		return 80
 	}
 
@@ -76,7 +79,6 @@ func GetTerminalWidth() int {
 // calculateValueColumnWidth calculates the available width for the value column
 // in a tabwriter output, accounting for the label column width and padding.
 func calculateValueColumnWidth(label string) int {
-	termWidth := GetTerminalWidth()
 
 	// Tabwriter will expand the first column to fit the widest label
 	// In our reports, we need to consider common labels
@@ -103,7 +105,7 @@ func calculateValueColumnWidth(label string) int {
 
 	// Calculate available width for value column
 	// Leave some margin for safety
-	valueWidth := termWidth - firstColumnWidth - 5
+	valueWidth := ReportWidth - firstColumnWidth - 5
 
 	// Ensure a reasonable minimum
 	if valueWidth < 40 {
@@ -113,59 +115,19 @@ func calculateValueColumnWidth(label string) int {
 	return valueWidth
 }
 
-// Adds title frame
+// Title returns a bold section heading padded with "=" to ReportWidth.
 func Title(t string) string {
 	title := "== " + strings.ToUpper(t) + " "
 
 	// Calculate remaining space and fill with =
-	remaining := HeadingWidth - len(title)
+	remaining := ReportWidth - utf8.RuneCountInString(title)
 	if remaining > 0 {
 		title += strings.Repeat("=", remaining)
 	} else {
 		title += "=="
 	}
 
-	return title
-}
-
-// MeasureMaxLineWidth measures the maximum line width of formatted output
-func MeasureMaxLineWidth(content string) int {
-	maxWidth := 0
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		// Remove ANSI codes if any and measure visible characters
-		visibleLen := len(line)
-		if visibleLen > maxWidth {
-			maxWidth = visibleLen
-		}
-	}
-	return maxWidth
-}
-
-// SetHeadingWidthFromContent generates content to a buffer, measures it, and sets HeadingWidth
-func SetHeadingWidthFromContent(contentGenerator func(*tabwriter.Writer)) {
-	// Create a buffer to capture output
-	var buf bytes.Buffer
-	tempTW := tabwriter.NewWriter(&buf, minwidth, tabwidth, padding, padchar, flags)
-
-	// Generate content to buffer
-	contentGenerator(tempTW)
-	tempTW.Flush()
-
-	// Measure max line width
-	maxWidth := MeasureMaxLineWidth(buf.String())
-
-	// Get terminal width to ensure we don't exceed it
-	termWidth := GetTerminalWidth()
-
-	// Set heading width (with a minimum of 60, maximum of terminal width)
-	if maxWidth < 60 {
-		HeadingWidth = 60
-	} else if maxWidth > termWidth {
-		HeadingWidth = termWidth
-	} else {
-		HeadingWidth = maxWidth
-	}
+	return Bold(title)
 }
 
 // Adds period to end of string if one is not present.
@@ -316,29 +278,41 @@ func WeeklySummary(f weather.Forecast) {
 }
 
 // WeatherAlerts prints active weather alerts if any exist.
+// NWS descriptions are split into their WHAT/WHERE/WHEN/IMPACTS sections when present.
 func WeatherAlerts(f weather.Forecast) {
 	if len(f.Alerts) == 0 {
 		return
 	}
 
-	fmt.Println()
 	fmt.Println(Title("Weather Alerts"))
+	now := time.Now()
 	for i, alert := range f.Alerts {
 		if i > 0 {
-			fmt.Println()
+			fmt.Fprintln(TW)
 		}
-		fmt.Fprintf(TW, "Alert:\t%s\n", alert.Title)
 
-		// Show expiration time if available
+		headline := Warn(alert.Title)
 		if alert.Expires > 0 {
-			expiryTime := FormatTime(alert.Expires)
-			fmt.Fprintf(TW, "Expires:\t%s\n", expiryTime)
+			headline += " · until " + FormatUntil(time.Unix(int64(alert.Expires), 0), now)
 		}
 
-		// Wrap description instead of truncating
-		maxWidth := calculateValueColumnWidth("Details")
-		wrappedDescription := strings.Join(WrapText(alert.Description, maxWidth), "\n\t")
-		fmt.Fprintf(TW, "Details:\t%s\n", wrappedDescription)
+		sections := ParseNWSDescription(alert.Description)
+		if len(sections) == 0 && alert.Description != "" {
+			sections = []LabeledText{{Label: "Details", Text: strings.Join(strings.Fields(alert.Description), " ")}}
+		}
+
+		// Wrap to whatever is left after the label column tabwriter will produce.
+		labelWidth := len("Alert:")
+		for _, sec := range sections {
+			labelWidth = max(labelWidth, utf8.RuneCountInString(sec.Label)+1)
+		}
+		wrapWidth := max(ReportWidth-max(labelWidth+padding, minwidth), 30)
+
+		fmt.Fprintf(TW, "Alert:\t%s\n", headline)
+		for _, sec := range sections {
+			fmt.Fprintf(TW, "%s:\t%s\n", sec.Label, strings.Join(WrapText(sec.Text, wrapWidth), "\n\t"))
+		}
 	}
 	TW.Flush()
+	fmt.Println()
 }

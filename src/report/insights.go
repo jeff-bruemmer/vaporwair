@@ -10,56 +10,41 @@ import (
 	"time"
 )
 
-// generateInsightsContent generates the insights report content to a given tabwriter
-func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.Forecast, includeHeadings bool) {
+// conditionsSection prints today's forecast paragraph and current conditions.
+func conditionsSection(tw *tabwriter.Writer, w weather.Forecast, a []air.Forecast) {
 	daily := w.Daily.Data[0]
 
 	// Find the most current hourly data point (closest to now)
 	current := GetCurrentHourlyData(w)
 
-	// Today's Summary
-	if includeHeadings {
-		fmt.Fprintln(tw, Title("Today's Forecast"))
+	fmt.Fprintln(tw, Title("Today's Forecast"))
+	summary := daily.DetailedForecast
+	if summary == "" {
+		summary = daily.Summary
 	}
+	if summary != "" {
+		fmt.Fprintln(tw, strings.Join(WrapText(AddPeriod(summary), ReportWidth), "\n"))
+	}
+	fmt.Fprintln(tw)
 
-	// Show detailed forecast for today if available
-	if daily.DetailedForecast != "" {
-		wrapped := strings.Join(WrapText(AddPeriod(daily.DetailedForecast), HeadingWidth-4), "\n")
-		fmt.Fprintf(tw, "%s\n", wrapped)
-	} else if daily.Summary != "" {
-		wrapped := strings.Join(WrapText(AddPeriod(daily.Summary), HeadingWidth-4), "\n")
-		fmt.Fprintf(tw, "%s\n", wrapped)
-	}
-	fmt.Fprintln(tw, "")
-
-	// Current conditions
-	if includeHeadings {
-		fmt.Fprintln(tw, Title("Current Conditions"))
-	}
+	fmt.Fprintln(tw, Title("Current Conditions"))
 
 	// Temperature with feels like
 	FormatTemperatureWithFeelsLike(tw, "Temperature", Round(current.Temperature), Round(current.ApparentTemperature), temperatureUnit)
-
-	fmt.Fprintf(tw, formatValueWithUnit, "Today's High", daily.TemperatureMax, temperatureUnit)
-	fmt.Fprintf(tw, formatValueWithUnit, "Today's Low", Round(daily.TemperatureMin), temperatureUnit)
+	fmt.Fprintf(tw, "High / Low:\t%.0f%s / %.0f%s\n", daily.TemperatureMax, temperatureUnit, Round(daily.TemperatureMin), temperatureUnit)
 
 	// Precipitation
 	if daily.PrecipProbability > 0 {
-		precipType := daily.PrecipType
-		if precipType != "" {
-			fmt.Fprintf(tw, "%s Chance:\t%.0f %s\n",
-				CapitalizeFirst(precipType),
-				Round(ToPercent(daily.PrecipProbability)),
-				percentUnit)
-		} else {
-			fmt.Fprintf(tw, formatValueWithUnit, "Precipitation", Round(ToPercent(daily.PrecipProbability)), percentUnit)
-		}
+		fmt.Fprintf(tw, "%s Chance:\t%.0f%s\n",
+			GetPrecipTypeOrDefault(daily.PrecipType),
+			Round(ToPercent(daily.PrecipProbability)),
+			percentUnit)
 	}
 
 	// Humidity and dewpoint
-	fmt.Fprintf(tw, formatValueWithUnit, "Humidity", ToPercent(current.Humidity), percentUnit)
+	fmt.Fprintf(tw, "Humidity:\t%.0f%s\n", ToPercent(current.Humidity), percentUnit)
 	if current.DewPoint > 0 {
-		fmt.Fprintf(tw, formatValueWithUnit, "Dewpoint", current.DewPoint, temperatureUnit)
+		fmt.Fprintf(tw, "Dewpoint:\t%.0f%s\n", current.DewPoint, temperatureUnit)
 	}
 
 	// Wind
@@ -83,18 +68,55 @@ func generateInsightsContent(tw *tabwriter.Writer, w weather.Forecast, a []air.F
 	}
 }
 
+// hourRow holds the formatted cells for one row of the Next Few Hours table.
+type hourRow struct {
+	time, temp, conditions, precip, wind string
+	hasPrecip                            bool
+}
+
+// nextHours returns formatted rows for up to maxHours future hours.
+func nextHours(w weather.Forecast, maxHours int) []hourRow {
+	currentTime := float64(time.Now().Unix())
+	var rows []hourRow
+
+	for _, hour := range w.Hourly.Data {
+		if len(rows) >= maxHours {
+			break
+		}
+		// Only show hours that are in the future
+		if hour.Time <= currentTime {
+			continue
+		}
+
+		row := hourRow{
+			time:       hour.PeriodName,
+			temp:       FormatTemperatureString(Round(hour.Temperature), Round(hour.ApparentTemperature), temperatureUnit),
+			conditions: hour.Summary,
+			precip:     "0%",
+			wind:       FormatWindString(hour.WindSpeed, hour.WindBearing, hour.WindGust, windSpeedUnit, false),
+		}
+		if row.time == "" {
+			row.time = FormatTime(hour.Time)
+		}
+		if hour.PrecipProbability > 0 {
+			row.hasPrecip = true
+			kind := hour.PrecipType
+			if kind == "" {
+				kind = "precip"
+			}
+			row.precip = fmt.Sprintf("%.0f%% %s", ToPercent(hour.PrecipProbability), kind)
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
 // InsightsReport provides today's forecast, what to wear, and next few hours.
 func InsightsReport(w weather.Forecast, a []air.Forecast) {
 	// Show weather alerts first if any exist
 	WeatherAlerts(w)
 
-	// First pass: measure content width (without headings)
-	SetHeadingWidthFromContent(func(tw *tabwriter.Writer) {
-		generateInsightsContent(tw, w, a, false)
-	})
-
-	// Second pass: generate actual output with properly sized headings
-	generateInsightsContent(TW, w, a, true)
+	conditionsSection(TW, w, a)
 	TW.Flush()
 
 	// What to Wair
@@ -105,52 +127,38 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println()
 	fmt.Println(Title("Next Few Hours"))
 
-	// Table header
-	fmt.Fprintf(TW, "Time\tTemp\tConditions\tPrecip\tWind\n")
-	fmt.Fprintf(TW, "----\t----\t----------\t------\t----\n")
+	rows := nextHours(w, DefaultMaxHours)
 
-	currentTime := float64(time.Now().Unix())
-	hoursShown := 0
-	maxHours := 6
+	// Drop the precipitation column when it would be all zeros.
+	showPrecip := false
+	for _, r := range rows {
+		showPrecip = showPrecip || r.hasPrecip
+	}
 
-	for i := 0; i < len(w.Hourly.Data) && hoursShown < maxHours; i++ {
-		hour := w.Hourly.Data[i]
-		// Only show hours that are in the future
-		if hour.Time > currentTime {
-			periodLabel := hour.PeriodName
-			if periodLabel == "" {
-				periodLabel = FormatTime(hour.Time)
-			}
+	if showPrecip {
+		fmt.Fprintf(TW, "Time\tTemp\tConditions\tPrecip\tWind\n")
+	} else {
+		fmt.Fprintf(TW, "Time\tTemp\tConditions\tWind\n")
+	}
 
-			// Format temperature with feels like if different
-			tempStr := FormatTemperatureString(Round(hour.Temperature), Round(hour.ApparentTemperature), temperatureUnit)
-
-			// Build precipitation string
-			precipStr := ""
-			if hour.PrecipProbability > 0 {
-				if hour.PrecipType != "" {
-					precipStr = fmt.Sprintf("%.0f%% %s", ToPercent(hour.PrecipProbability), hour.PrecipType)
-				} else {
-					precipStr = fmt.Sprintf("%.0f%% precip", ToPercent(hour.PrecipProbability))
-				}
-			} else {
-				precipStr = "0%"
-			}
-
-			// Build wind string
-			windStr := FormatWindString(hour.WindSpeed, hour.WindBearing, hour.WindGust, windSpeedUnit, false)
-
-			fmt.Fprintf(TW, "%s\t%s\t%s\t%s\t%s\n",
-				periodLabel,
-				tempStr,
-				hour.Summary,
-				precipStr,
-				windStr)
-			hoursShown++
+	// Leave conditions and wind blank when unchanged from the row above, so changes stand out.
+	prev := hourRow{}
+	for _, r := range rows {
+		conditions, wind := r.conditions, r.wind
+		if conditions == prev.conditions {
+			conditions = ""
 		}
+		if wind == prev.wind {
+			wind = ""
+		}
+		if showPrecip {
+			fmt.Fprintf(TW, "%s\t%s\t%s\t%s\t%s\n", r.time, r.temp, conditions, r.precip, wind)
+		} else {
+			fmt.Fprintf(TW, "%s\t%s\t%s\t%s\n", r.time, r.temp, conditions, wind)
+		}
+		prev = r
 	}
 
 	TW.Flush()
 	fmt.Println()
 }
-
