@@ -11,14 +11,19 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 )
 
-// GetCurrentHourlyData finds the most current hourly data point (closest to now).
-// If no future hourly data is available, it returns the Currently data point.
+// GetCurrentHourlyData finds the hour in progress, or failing that the nearest future hour.
+// If no current or future hourly data is available, it returns the Currently data point.
 func GetCurrentHourlyData(w weather.Forecast) weather.DataPoint {
 	if len(w.Hourly.Data) == 0 {
 		return w.Currently
 	}
 
 	currentTime := float64(time.Now().Unix())
+	for _, hour := range w.Hourly.Data {
+		if hour.Time <= currentTime && currentTime < hour.Time+3600 {
+			return hour
+		}
+	}
 	current := w.Currently
 	minDiff := float64(999999999)
 
@@ -240,4 +245,77 @@ func FormatUntil(t, now time.Time) string {
 	default:
 		return fmt.Sprintf("%s (in %dd)", clock, int(d.Hours()/24))
 	}
+}
+
+// AlertHeadline marks an alert title in plain ASCII, e.g. "! WINTER STORM WARNING".
+// Output is black and white, so the marker and capitals carry the emphasis.
+func AlertHeadline(title string) string {
+	return "! " + strings.ToUpper(title)
+}
+
+// aqiConcern lists the EPA categories at which outdoor activity should be limited.
+var aqiConcern = map[string]bool{
+	"Unhealthy for Sensitive Groups": true,
+	"Unhealthy":                      true,
+	"Very Unhealthy":                 true,
+	"Hazardous":                      true,
+}
+
+// AQICategory returns the EPA category name, with a trailing " !" when it is
+// "Unhealthy for Sensitive Groups" or worse, so severity reads without color.
+func AQICategory(name string) string {
+	if aqiConcern[name] {
+		return name + " !"
+	}
+	return name
+}
+
+// FeelsLikeRange returns the coldest feels-like and warmest actual temperature over
+// the next `hours` hours of hourly data, including the current hour. It falls back to
+// today's daily low and high when no upcoming hours are available.
+func FeelsLikeRange(w weather.Forecast, hours int) (coldest, warmest float64) {
+	cutoff := float64(time.Now().Add(-time.Hour).Unix())
+	n := 0
+	for _, h := range w.Hourly.Data {
+		if h.Time <= cutoff {
+			continue
+		}
+		if n == 0 || h.ApparentTemperature < coldest {
+			coldest = h.ApparentTemperature
+		}
+		if n == 0 || h.Temperature > warmest {
+			warmest = h.Temperature
+		}
+		n++
+		if n == hours {
+			break
+		}
+	}
+	if n == 0 && len(w.Daily.Data) > 0 {
+		return w.Daily.Data[0].TemperatureMin, w.Daily.Data[0].TemperatureMax
+	}
+	return coldest, warmest
+}
+
+// Truncate shortens s to at most n runes, ending in "..." when cut.
+func Truncate(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 3 {
+		return string(r[:n])
+	}
+	return string(r[:n-3]) + "..."
+}
+
+// upcomingHours drops hours that have already ended; NOAA's hourly feed can lag by an hour or two.
+func upcomingHours(data []weather.DataPoint) []weather.DataPoint {
+	hourStart := float64(time.Now().Add(-time.Hour).Unix())
+	for i, h := range data {
+		if h.Time > hourStart {
+			return data[i:]
+		}
+	}
+	return nil
 }

@@ -17,7 +17,12 @@ func conditionsSection(tw *tabwriter.Writer, w weather.Forecast, a []air.Forecas
 	// Find the most current hourly data point (closest to now)
 	current := GetCurrentHourlyData(w)
 
-	fmt.Fprintln(tw, Title("Today's Forecast"))
+	// Name the section after NOAA's period ("This Afternoon", "Tonight") so it's right at any hour.
+	period := daily.PeriodName
+	if period == "" {
+		period = "Today"
+	}
+	fmt.Fprintln(tw, Title(period))
 	summary := daily.DetailedForecast
 	if summary == "" {
 		summary = daily.Summary
@@ -43,7 +48,7 @@ func conditionsSection(tw *tabwriter.Writer, w weather.Forecast, a []air.Forecas
 
 	// Humidity and dewpoint
 	fmt.Fprintf(tw, "Humidity:\t%.0f%s\n", ToPercent(current.Humidity), percentUnit)
-	if current.DewPoint > 0 {
+	if current.DewPoint != 0 { // 0 means NOAA sent no dewpoint; see WeatherDaily
 		fmt.Fprintf(tw, "Dewpoint:\t%.0f%s\n", current.DewPoint, temperatureUnit)
 	}
 
@@ -51,19 +56,19 @@ func conditionsSection(tw *tabwriter.Writer, w weather.Forecast, a []air.Forecas
 	windStr := FormatWindString(current.WindSpeed, current.WindBearing, current.WindGust, windSpeedUnit, true)
 	fmt.Fprintf(tw, "Wind:\t%s\n", windStr)
 
-	// Pressure and visibility
-	if current.Pressure > 0 {
-		fmt.Fprintf(tw, formatValueWithUnit, "Pressure", current.Pressure, pressureUnit)
+	// Pressure and visibility come from the station observation, stored on Currently
+	if w.Currently.Pressure > 0 {
+		fmt.Fprintf(tw, formatPressure, "Pressure", w.Currently.Pressure, pressureUnit)
 	}
-	if current.Visibility > 0 {
-		fmt.Fprintf(tw, formatValueWithUnit, "Visibility", current.Visibility, distanceUnit)
+	if w.Currently.Visibility > 0 {
+		fmt.Fprintf(tw, formatValueWithWordUnit, "Visibility", w.Currently.Visibility, distanceUnit)
 	}
 
 	// Air Quality
 	if len(a) > 0 {
 		aqi, particle, category := GetHighestAQIForToday(a)
 		if aqi >= 0 {
-			fmt.Fprintf(tw, "Air Quality:\t%d AQI (%s) - %s\n", aqi, particle, category)
+			fmt.Fprintf(tw, "Air Quality:\t%d AQI (%s) - %s\n", aqi, particle, AQICategory(category))
 		}
 	}
 }
@@ -136,9 +141,9 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 	}
 
 	if showPrecip {
-		fmt.Fprintf(TW, "Time\tTemp\tConditions\tPrecip\tWind\n")
+		fmt.Fprintf(Table, "Time\tTemp\tConditions\tPrecip\tWind\n")
 	} else {
-		fmt.Fprintf(TW, "Time\tTemp\tConditions\tWind\n")
+		fmt.Fprintf(Table, "Time\tTemp\tConditions\tWind\n")
 	}
 
 	// Leave conditions and wind blank when unchanged from the row above, so changes stand out.
@@ -152,13 +157,13 @@ func InsightsReport(w weather.Forecast, a []air.Forecast) {
 			wind = ""
 		}
 		if showPrecip {
-			fmt.Fprintf(TW, "%s\t%s\t%s\t%s\t%s\n", r.time, r.temp, conditions, r.precip, wind)
+			fmt.Fprintf(Table, "%s\t%s\t%s\t%s\t%s\n", r.time, r.temp, conditions, r.precip, wind)
 		} else {
-			fmt.Fprintf(TW, "%s\t%s\t%s\t%s\n", r.time, r.temp, conditions, wind)
+			fmt.Fprintf(Table, "%s\t%s\t%s\t%s\n", r.time, r.temp, conditions, wind)
 		}
 		prev = r
 	}
 
-	TW.Flush()
+	Table.Flush()
 	fmt.Println()
 }

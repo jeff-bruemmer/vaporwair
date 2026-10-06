@@ -37,6 +37,8 @@ type AppConfig struct {
 	Config             Config
 	HomeDir            string
 	CacheTimeoutMinutes float64
+	// FirstRun is true when this run created the config file.
+	FirstRun bool
 }
 
 // APICallInfo contains metadata to determine validity of last API call.
@@ -170,7 +172,8 @@ func InitializeAppConfig() (AppConfig, error) {
 
 	// If config doesn't exist, create it with user input
 	if !configExists {
-		ANAPIKey := Capture("Enter Air Now API key: ")
+		appConfig.FirstRun = true
+		ANAPIKey := Capture("Enter AirNow API key (press Enter to skip): ")
 		err := CreateConfig(homeDir, ANAPIKey)
 		if err != nil {
 			return appConfig, fmt.Errorf("error creating configuration: %w", err)

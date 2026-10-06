@@ -2,7 +2,6 @@ package report
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jeff-bruemmer/vaporwair/src/air"
@@ -29,9 +28,7 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 			fmt.Println()
 		}
 
-		fmt.Println(Separator)
-		fmt.Fprintf(TW, "Alert %d:\t%s\n", i+1, alert.Title)
-		fmt.Println(Separator)
+		fmt.Println(AlertHeadline(alert.Title))
 
 		// Show onset time (when alert begins)
 		if alert.Time > 0 {
@@ -62,16 +59,8 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 			fmt.Fprintf(TW, "More Info:\t%s\n", alert.URI)
 		}
 
+		printAlertSections(alert.Description, "Time Remaining:")
 		TW.Flush()
-
-		// Show description with proper wrapping
-		if alert.Description != "" {
-			fmt.Println()
-			maxWidth := calculateValueColumnWidth("Description")
-			wrappedDescription := strings.Join(WrapText(alert.Description, maxWidth), "\n\t")
-			fmt.Fprintf(TW, "Description:\t%s\n", wrappedDescription)
-			TW.Flush()
-		}
 	}
 
 	fmt.Println()

@@ -13,7 +13,14 @@ type ClothingRecommendation struct {
 	Outfit      string
 	Accessories []string
 	Notes       []string
+	// Coldest is the lowest feels-like temperature over the next ClothingHours;
+	// the outfit is chosen for it, since that is the part of the day you must dress for.
+	Coldest float64
+	Warmest float64
 }
+
+// ClothingHours is how far ahead clothing recommendations look.
+const ClothingHours = 12
 
 // getBaseOutfit returns clothing recommendations based on temperature.
 func getBaseOutfit(temp float64) string {
@@ -35,8 +42,10 @@ func GetClothingRecommendation(f weather.Forecast) ClothingRecommendation {
 	current := f.Currently
 	daily := f.Daily.Data[0]
 
-	// Use the high temp for outfit recommendation
-	temp := daily.TemperatureMax
+	// Dress for the coldest it will feel; warm-weather advice uses the warmest it gets.
+	rec.Coldest, rec.Warmest = FeelsLikeRange(f, ClothingHours)
+	temp := rec.Coldest
+	hot := rec.Warmest
 	rec.Outfit = getBaseOutfit(temp)
 
 	rec.Accessories = []string{}
@@ -55,17 +64,17 @@ func GetClothingRecommendation(f weather.Forecast) ClothingRecommendation {
 	}
 
 	// Sun protection for hot weather
-	if temp >= 75 {
+	if hot >= 75 {
 		rec.Accessories = append(rec.Accessories, "Sunglasses")
 		rec.Accessories = append(rec.Accessories, "Sun hat or cap")
 		rec.Notes = append(rec.Notes, "Apply sunscreen (SPF 30+)")
 	}
 
-	if temp >= 85 {
+	if hot >= 85 {
 		rec.Notes = append(rec.Notes, "Stay hydrated - bring water bottle")
 	}
 
-	if temp >= 95 {
+	if hot >= 95 {
 		rec.Notes = append(rec.Notes, "Avoid strenuous outdoor activity during peak heat")
 	}
 
@@ -101,7 +110,7 @@ func GetClothingRecommendation(f weather.Forecast) ClothingRecommendation {
 
 	// Humidity recommendations
 	humidity := current.Humidity * 100
-	if humidity >= 70 && temp >= 75 {
+	if humidity >= 70 && hot >= 75 {
 		rec.Notes = append(rec.Notes, "High humidity - feels warmer than actual temperature")
 		rec.Notes = append(rec.Notes, "Choose moisture-wicking fabrics")
 	}
@@ -110,9 +119,8 @@ func GetClothingRecommendation(f weather.Forecast) ClothingRecommendation {
 	// This is a simplified check - full implementation would use air quality data
 
 	// Temperature swing recommendations
-	tempSwing := daily.TemperatureMax - daily.TemperatureMin
-	if tempSwing >= 20 {
-		rec.Notes = append(rec.Notes, "Large temperature swing - bring layers you can remove")
+	if rec.Warmest-rec.Coldest >= 15 {
+		rec.Notes = append(rec.Notes, fmt.Sprintf("Dress in layers - feels like %.0fF at the coldest, up to %.0fF", rec.Coldest, rec.Warmest))
 	}
 
 	return rec
@@ -203,40 +211,62 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	current := GetCurrentHourlyData(w)
 
 	// Temperature summary
-	fmt.Fprintf(TW, "Current:\t%.0f°F\n", current.Temperature)
-	fmt.Fprintf(TW, "Today's Range:\t%.0f°F - %.0f°F\n", daily.TemperatureMin, daily.TemperatureMax)
-	fmt.Fprintf(TW, "Temp Range\tOutfit Type\n")
-	fmt.Fprintf(TW, "----------\t-----------\n")
-
-	currentTemp := int(current.Temperature)
-
-	for _, level := range OutfitLevels {
-		// Check if this is the recommended outfit for current temp or high temp
-		indicator := "  "
-		if currentTemp >= level.MinTemp && currentTemp <= level.MaxTemp {
-			indicator = "→ "
-		}
-
-		// Format temp range
-		var tempRange string
-		if level.MaxTemp >= 999 {
-			tempRange = fmt.Sprintf("%d°F+", level.MinTemp)
-		} else {
-			tempRange = fmt.Sprintf("%d-%d°F", level.MinTemp, level.MaxTemp)
-		}
-
-		fmt.Fprintf(TW, "%s%s\t%s\n", indicator, tempRange, level.Outfit)
-	}
+	fmt.Fprintf(TW, "Current:\t%.0f%s\n", current.Temperature, temperatureUnit)
+	fmt.Fprintf(TW, "Next %dh:\tfeels like %.0f%s to %.0f%s\n", ClothingHours, rec.Coldest, temperatureUnit, rec.Warmest, temperatureUnit)
 	TW.Flush()
+	fmt.Println()
+
+	// Outfit tiers, with the recommended one marked
+	basis := int(rec.Coldest)
+	fmt.Fprintf(Table, "  Feels like\tOutfit\n")
+	fmt.Fprintf(Table, "  ----------\t------\n")
+	for _, level := range OutfitLevels {
+		indicator := "  "
+		if basis >= level.MinTemp && basis <= level.MaxTemp {
+			indicator = "> "
+		}
+
+		var tempRange string
+		switch {
+		case level.MaxTemp >= 999:
+			tempRange = fmt.Sprintf("%d%s+", level.MinTemp, temperatureUnit)
+		case level.MinTemp <= -100:
+			tempRange = fmt.Sprintf("<%d%s", level.MaxTemp+1, temperatureUnit)
+		default:
+			tempRange = fmt.Sprintf("%d-%d%s", level.MinTemp, level.MaxTemp, temperatureUnit)
+		}
+
+		fmt.Fprintf(Table, "%s%s\t%s\n", indicator, tempRange, level.Outfit)
+	}
+	Table.Flush()
 	fmt.Println()
 
 	// Accessories
 	if len(rec.Accessories) > 0 {
-		fmt.Fprintf(TW, "Accessories to bring:\n")
+		fmt.Println("Bring:")
 		for _, accessory := range rec.Accessories {
-			fmt.Fprintf(TW, "\t• %s\n", accessory)
+			fmt.Printf("  - %s\n", accessory)
 		}
-		fmt.Println()
+	}
+
+	// Other tips (precipitation tips are covered in their own section below)
+	var tips []string
+	for _, note := range rec.Notes {
+		if !IsPrecipitationNote(note) {
+			tips = append(tips, note)
+		}
+	}
+	if len(tips) > 0 {
+		fmt.Println("Tips:")
+		for _, tip := range tips {
+			for i, line := range WrapText(tip, ReportWidth-4) {
+				if i == 0 {
+					fmt.Printf("  - %s\n", line)
+				} else {
+					fmt.Printf("    %s\n", line)
+				}
+			}
+		}
 	}
 
 	// Precipitation forecast
@@ -287,21 +317,6 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 		}
 	} else {
 		fmt.Fprintf(TW, "No precipitation expected today\n")
-	}
-
-	// Other important tips (not precipitation related)
-	for _, note := range rec.Notes {
-		// Skip precipitation-related notes since we handle those above
-		if !IsPrecipitationNote(note) {
-			wrapped := WrapText(note, 70)
-			for i, line := range wrapped {
-				if i == 0 {
-					fmt.Fprintf(TW, "\t• %s\n", line)
-				} else {
-					fmt.Fprintf(TW, "\t  %s\n", line)
-				}
-			}
-		}
 	}
 
 	TW.Flush()

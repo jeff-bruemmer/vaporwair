@@ -27,49 +27,53 @@ var zipCode string
 var useCurrentLocation bool
 var refresh bool
 
-// notes collects non-fatal warnings raised while the spinner is running.
+// notes collects non-fatal warnings raised while fetching.
 // They're printed after the report so they don't garble the spinner line.
+// Only the main goroutine appends to it.
 var notes []string
+
+// stopSpinner clears the spinner if one is running. fatalf calls it so an error
+// message never lands on the same line as the spinner.
+var stopSpinner = func() {}
+
+// fatalf stops the spinner, prints an error to stderr, and exits.
+func fatalf(format string, args ...any) {
+	stopSpinner()
+	log.Fatalf(format, args...)
+}
 
 // isValid checks if cached forecast is still fresh (optimistic caching).
 func isValid(t time.Time, timeout float64) bool {
 	return time.Since(t).Minutes() < timeout
 }
 
-// Spinner creates a randomly populated loading bar with zero connection to reality.
-// Its purpose is to show the user the program is running.
-// It listens on the done channel and stops when signaled.
-// Returns the original timestamp via the result channel.
-func Spinner(startTime time.Time, done chan bool, result chan time.Time) {
-	terminalWidth := report.GetTerminalWidth()
-	barWidth := max(terminalWidth-2, 10) // Account for brackets []
-	maxIterations := 600                 // 60 seconds timeout
-
-	for i := 0; i <= maxIterations; i++ {
-		select {
-		case <-done:
-			fmt.Printf("\r%s\r", strings.Repeat(" ", terminalWidth))
-			result <- startTime
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-
-			bar := make([]rune, barWidth)
-			for j := range barWidth {
-				if time.Now().UnixNano()%(int64(j+1)*3) == 0 {
-					bar[j] = '█'
-				} else {
-					bar[j] = ' '
-				}
-			}
-
-			fmt.Printf("\r[%s]", string(bar))
-
-			if i == maxIterations {
-				fmt.Printf("\r%s\r", strings.Repeat(" ", terminalWidth))
-				log.Fatal("Request timed out after 60 seconds. The weather service may be unavailable.")
+// startSpinner shows an ASCII spinner and label on stderr until stopSpinner is called.
+// It draws nothing when stderr isn't a terminal, so piped or redirected output stays clean.
+func startSpinner(label string) {
+	if !report.IsTerminal(os.Stderr) {
+		return
+	}
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		frames := `|/-\`
+		tick := time.NewTicker(100 * time.Millisecond)
+		defer tick.Stop()
+		for i := 0; ; i++ {
+			fmt.Fprintf(os.Stderr, "\r%c %s", frames[i%len(frames)], label)
+			select {
+			case <-done:
+				fmt.Fprintf(os.Stderr, "\r%s\r", strings.Repeat(" ", len(label)+2))
+				return
+			case <-tick.C:
 			}
 		}
+	}()
+	stopSpinner = func() {
+		close(done)
+		<-finished
+		stopSpinner = func() {}
 	}
 }
 
@@ -102,7 +106,7 @@ func RunReports(f weather.Forecast, a []air.Forecast) {
 func getIPGeoData() geolocation.GeoData {
 	geoData, err := geolocation.GetGeoData(geolocation.IPAPIAddress)
 	if err != nil {
-		log.Fatalf("Failed to determine location from IP address: %v\nTry specifying a location with -zip <code>.", err)
+		fatalf("Failed to determine location from IP address: %v\nTry specifying a location with -zip <code>.", err)
 	}
 	return geoData
 }
@@ -119,7 +123,7 @@ func GetCoordinates(appConfig storage.AppConfig) (geolocation.Coordinates, strin
 	if zipCode != "" {
 		geoData, err := geolocation.GetGeoDataFromZip(zipCode)
 		if err != nil {
-			log.Fatalf("Failed to get location for zip code %s: %v\nPlease verify the zip code is valid.", zipCode, err)
+			fatalf("Failed to get location for zip code %s: %v\nPlease verify the zip code is valid.", zipCode, err)
 		}
 		return geolocation.FormatCoordinates(geoData), zipCode
 	}
@@ -140,14 +144,13 @@ func GetCoordinates(appConfig storage.AppConfig) (geolocation.Coordinates, strin
 
 func PrintBanner() {
 	banner := `
-██╗   ██╗ █████╗ ██████╗  ██████╗ ██████╗ ██╗    ██╗ █████╗ ██╗██████╗
-██║   ██║██╔══██╗██╔══██╗██╔═══██╗██╔══██╗██║    ██║██╔══██╗██║██╔══██╗
-██║   ██║███████║██████╔╝██║   ██║██████╔╝██║ █╗ ██║███████║██║██████╔╝
-╚██╗ ██╔╝██╔══██║██╔═══╝ ██║   ██║██╔══██╗██║███╗██║██╔══██║██║██╔══██╗
- ╚████╔╝ ██║  ██║██║     ╚██████╔╝██║  ██║╚███╔███╔╝██║  ██║██║██║  ██║
-  ╚═══╝  ╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝
+ _   __ ___    ____   ____   ____  _      __ ___    ____ ____
+| | / //   |  / __ \ / __ \ / __ \| | /| / //   |  /  _// __ \
+| |/ // /| | / /_/ // / / // /_/ /| |/ |/ // /| |  / / / /_/ /
+|   // ___ |/ ____// /_/ // _, _/ |  /|  // ___ |_/ / / _, _/
+|__//_/  |_/_/     \____//_/ |_|  |__/|__//_/  |_/___//_/ |_|
 `
-	fmt.Println(banner)
+	fmt.Fprintln(os.Stderr, banner)
 }
 
 // PrintHeader prints a one-line header: location, time, and cache age when served from cache.
@@ -161,19 +164,22 @@ func PrintHeader(t time.Time, c geolocation.Coordinates, cachedAt time.Time) {
 	if !cachedAt.IsZero() {
 		age := t.Sub(cachedAt)
 		if age < time.Minute {
-			parts = append(parts, report.Dim("cached just now"))
+			parts = append(parts, "cached just now")
 		} else {
-			parts = append(parts, report.Dim(fmt.Sprintf("cached %dm ago", int(age.Minutes()))))
+			parts = append(parts, fmt.Sprintf("cached %dm ago", int(age.Minutes())))
 		}
 	}
-	fmt.Println(strings.Join(parts, " · "))
+	fmt.Println(strings.Join(parts, " | "))
 	fmt.Println()
 }
 
-// PrintNotes prints any warnings collected while fetching, dimmed, after the report.
+// PrintNotes prints any warnings collected while fetching, after the report.
 func PrintNotes() {
+	if len(notes) > 0 {
+		fmt.Println()
+	}
 	for _, n := range notes {
-		fmt.Println(report.Dim("Note: " + n))
+		fmt.Println("Note: " + n)
 	}
 }
 
@@ -189,7 +195,7 @@ func init() {
 		fmt.Fprintf(os.Stderr, "\nUsage: vaporwair [options]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nWithout any flags, vaporwair displays the insights report (comparative analysis & weather recommendations).\n")
+		fmt.Fprintf(os.Stderr, "\nWithout any flags, vaporwair displays the insights report (today's forecast, what to wear, next few hours).\n")
 	}
 
 	flag.BoolVar(&weatherHourly, "h", false, "Prints weather forecast hour by hour with detailed conditions.")
@@ -213,13 +219,18 @@ func setupConfiguration() (storage.AppConfig, error) {
 		return appConfig, err
 	}
 
-	// Validate that AirNow API key is present
+	// Explain a missing AirNow key once, at setup. Later runs get a one-line note
+	// only on reports that show air quality.
 	if appConfig.Config.AirNowAPIKey == "" {
 		configFile := appConfig.HomeDir + storage.ConfigFileName
-		fmt.Println("Warning: AirNow API key is missing.")
-		fmt.Println("Air quality data will not be available.")
-		fmt.Println("To add your API key, edit: " + configFile)
-		fmt.Println("Get a free API key at: https://docs.airnowapi.org/account/request/")
+		if appConfig.FirstRun {
+			fmt.Println("No AirNow API key: air quality data will not be available.")
+			fmt.Println("Get a free key at https://docs.airnowapi.org/account/request/")
+			fmt.Println("and add it to " + configFile)
+			fmt.Println()
+		} else if airQuality || summaryReport {
+			notes = append(notes, "Air quality off: no AirNow API key in "+configFile)
+		}
 	}
 
 	return appConfig, nil
@@ -228,8 +239,12 @@ func setupConfiguration() (storage.AppConfig, error) {
 // fetchForecasts retrieves weather and air quality forecasts for given coordinates.
 // Returns weather forecast and air quality forecast.
 func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weather.Forecast, []air.Forecast, error) {
+	type airResult struct {
+		forecast []air.Forecast
+		note     string // non-empty when AirNow failed; reported, not fatal
+	}
 	weatherChan := make(chan weather.Forecast)
-	airChan := make(chan []air.Forecast)
+	airChan := make(chan airResult, 1)
 	errChan := make(chan error, 2)
 
 	// Fetch weather forecast
@@ -247,12 +262,13 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 		if config.AirNowAPIKey != "" && coords.Zip != "" {
 			anURL := air.BuildAirNowURL(air.AirNowAddress, coords.Zip, config.AirNowAPIKey)
 			forecast, err := air.GetForecast(anURL)
+			var note string
 			if err != nil {
-				notes = append(notes, fmt.Sprintf("Air quality unavailable (AirNow: %v)", err))
+				note = fmt.Sprintf("Air quality unavailable (AirNow: %v)", err)
 			}
-			airChan <- forecast
+			airChan <- airResult{forecast, note}
 		} else {
-			airChan <- []air.Forecast{}
+			airChan <- airResult{forecast: []air.Forecast{}}
 		}
 	}()
 
@@ -261,27 +277,48 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 	case err := <-errChan:
 		return weather.Forecast{}, nil, err
 	case wf := <-weatherChan:
-		af := <-airChan
-		return wf, af, nil
+		ar := <-airChan
+		if ar.note != "" {
+			notes = append(notes, ar.note)
+		}
+		return wf, ar.forecast, nil
 	case <-time.After(30 * time.Second):
 		return weather.Forecast{}, nil, fmt.Errorf("timeout: weather service did not respond within 30 seconds")
 	}
 }
 
-// loadCachedForecasts loads forecasts from cache if valid.
-// Cache is invalidated by: time expiry, location change, or user flags (-zip, -current, -refresh).
-func loadCachedForecasts(appConfig storage.AppConfig, t time.Time, spinnerDone chan bool, spinnerResult chan time.Time) bool {
-	if refresh || zipCode != "" || useCurrentLocation || appConfig.Config.DefaultZipCode != "" {
-		return false
+// targetZip returns the zip code this run asks for: the -zip flag, else the saved default.
+// Empty means IP-based location (no default saved, or -current).
+func targetZip(appConfig storage.AppConfig) string {
+	if useCurrentLocation {
+		return ""
+	}
+	if zipCode != "" {
+		return zipCode
+	}
+	return appConfig.Config.DefaultZipCode
+}
+
+// loadCachedForecasts returns forecasts from the cache when they are fresh and for the
+// location this run asks for. -refresh and -current always bypass the cache; a zip
+// request only uses a cache saved for that same zip.
+func loadCachedForecasts(appConfig storage.AppConfig) (storage.APICallInfo, weather.Forecast, []air.Forecast, bool) {
+	var none storage.APICallInfo
+	if refresh || useCurrentLocation {
+		return none, weather.Forecast{}, nil, false
 	}
 
 	pc, err := storage.LoadCallInfo(appConfig.HomeDir + storage.SavedCallFileName)
 	if err != nil || !isValid(pc.Time, appConfig.CacheTimeoutMinutes) {
-		return false
+		return none, weather.Forecast{}, nil, false
 	}
+	if zip := targetZip(appConfig); zip != "" && pc.Coordinates.Zip != zip {
+		return none, weather.Forecast{}, nil, false
+	}
+
 	pwf, err := storage.LoadSavedWeather(appConfig.HomeDir + storage.SavedWeatherFileName)
 	if err != nil {
-		return false
+		return none, weather.Forecast{}, nil, false
 	}
 
 	paf, err := storage.LoadSavedAir(appConfig.HomeDir + storage.SavedAirFileName)
@@ -290,66 +327,57 @@ func loadCachedForecasts(appConfig storage.AppConfig, t time.Time, spinnerDone c
 		paf = []air.Forecast{}
 	}
 
-	// Stop spinner and print results
-	spinnerDone <- true
-	<-spinnerResult
-	PrintHeader(t, pc.Coordinates, pc.Time)
-	RunReports(pwf, paf)
+	return pc, pwf, paf, true
+}
+
+// render prints the header, the selected report, and any notes.
+// A zero cachedAt means the forecast was just fetched.
+func render(t time.Time, c geolocation.Coordinates, cachedAt time.Time, wf weather.Forecast, af []air.Forecast) {
+	PrintHeader(t, c, cachedAt)
+	RunReports(wf, af)
 	report.TW.Flush()
 	PrintNotes()
+}
 
-	return true
+// saveDefaultZip remembers a -zip request as the default location for later runs.
+func saveDefaultZip(appConfig storage.AppConfig) {
+	if zipCode == "" || zipCode == appConfig.Config.DefaultZipCode {
+		return
+	}
+	if err := storage.UpdateDefaultZipCode(appConfig.HomeDir, zipCode); err != nil {
+		fmt.Printf("Note: Could not save default zip code: %v\n", err)
+	}
 }
 
 // main orchestrates the application flow: setup, caching, fetching, and reporting.
 func main() {
 	t := time.Now()
+	log.SetFlags(0) // errors read as CLI messages, not timestamped log lines
 	flag.Parse()
 
-	// Setup configuration BEFORE starting spinner (may prompt for user input)
+	// Setup configuration first (may prompt for user input)
 	appConfig, err := setupConfiguration()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Create channels for spinner coordination (no global state)
-	spinnerDone := make(chan bool)
-	spinnerResult := make(chan time.Time)
-
-	// Start spinner in background
-	go Spinner(t, spinnerDone, spinnerResult)
-
-	// Try to use cached forecasts if still valid
-	if loadCachedForecasts(appConfig, t, spinnerDone, spinnerResult) {
-		return // Used cache successfully
+	// Serve from cache when it is fresh and for the requested location
+	if pc, wf, af, ok := loadCachedForecasts(appConfig); ok {
+		render(t, pc.Coordinates, pc.Time, wf, af)
+		saveDefaultZip(appConfig)
+		return
 	}
 
-	// Cache miss or expired - need to fetch new forecasts
-	coordinates, usedZip := GetCoordinates(appConfig)
+	// Cache miss or expired - fetch new forecasts
+	startSpinner("Fetching forecast...")
+	coordinates, _ := GetCoordinates(appConfig)
 	wf, af, err := fetchForecasts(coordinates, appConfig.Config)
 	if err != nil {
-		spinnerDone <- true
-		<-spinnerResult
-		log.Fatal(err)
+		fatalf("%v", err)
 	}
+	stopSpinner()
 
-	// Stop spinner and display results
-	spinnerDone <- true
-	<-spinnerResult
-	PrintHeader(t, coordinates, time.Time{})
-	RunReports(wf, af)
-	report.TW.Flush()
-	PrintNotes()
-
-	// Save forecasts for future use
+	render(t, coordinates, time.Time{}, wf, af)
 	SaveForecasts(appConfig.HomeDir, coordinates, wf, af)
-
-	// If a zip code was used (either from flag or default), save it as the new default
-	if usedZip != "" && usedZip != appConfig.Config.DefaultZipCode {
-		err = storage.UpdateDefaultZipCode(appConfig.HomeDir, usedZip)
-		if err != nil {
-			// Non-fatal error - just log it
-			fmt.Printf("Note: Could not save default zip code: %v\n", err)
-		}
-	}
+	saveDefaultZip(appConfig)
 }

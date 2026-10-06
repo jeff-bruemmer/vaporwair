@@ -2,22 +2,18 @@ package report
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 )
 
-// AirQuality prints AQI levels for today and tomorrow.
-// Includes O3, PM2.5, PM10, NO2, and CO indices.
+// AirQuality prints AQI levels for each forecast day and pollutant.
 func AirQuality(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Air Quality Forecast"))
 
-	// Check if any forecasts are available
-	if len(a) == 0 {
-		fmt.Println("\nNo air quality data available.")
-		return
-	}
-
-	// Check if we have any category data to display (even if numeric AQI is -1)
+	// Category data can exist even when the numeric AQI is still pending (-1)
 	hasData := false
 	for _, f := range a {
 		if f.Category.Name != "" {
@@ -25,52 +21,44 @@ func AirQuality(w weather.Forecast, a []air.Forecast) {
 			break
 		}
 	}
-
 	if !hasData {
-		fmt.Println("\nNo air quality data available.")
+		fmt.Println("No air quality data available.")
 		return
 	}
 
-	format := "%s\t%v\t%v\t%s\n"
-	formatNoPending := "%s\t%s\t%v\t%s\n"
+	// Fixed-width columns so every date's rows line up under one header.
+	// Pollutant names from AirNow are short (O3, OZONE, PM2.5, PM10, NO2, CO).
+	row := "  %-9s  %7s  %s\n"
+	anyPending := false
 	date := ""
-	fmt.Fprintf(TW, "Type\tAQI\tCategory\tDescription\n")
-	fmt.Fprintf(TW, "----\t---\t--------\t-----------\n")
+	fmt.Printf(row, "Pollutant", "AQI", "Category")
+	fmt.Printf(row, "---------", "---", "--------")
 	for _, f := range a {
 		if f.DateForecast != date {
-			fmt.Println()
 			date = f.DateForecast
-			fmt.Println(date)
-			fmt.Println("==========")
+			fmt.Println(formatAQIDate(date))
 		}
 
-		// If we have a numeric AQI, show it
+		aqi := "pending"
 		if f.AQI >= 0 {
-			fmt.Fprintf(TW, format,
-				f.ParameterName,
-				f.AQI,
-				f.Category.Number,
-				f.Category.Name)
+			aqi = fmt.Sprint(f.AQI)
 		} else {
-			// No numeric AQI yet, but show category if available
-			fmt.Fprintf(TW, formatNoPending,
-				f.ParameterName,
-				"pending",
-				f.Category.Number,
-				f.Category.Name)
+			anyPending = true
 		}
-		TW.Flush()
+		fmt.Printf(row, f.ParameterName, aqi, AQICategory(f.Category.Name))
 	}
 
-	// Add note if any AQI values are pending
-	anyPending := false
-	for _, f := range a {
-		if f.AQI < 0 {
-			anyPending = true
-			break
-		}
-	}
 	if anyPending {
-		fmt.Println("\nNote: Numeric AQI values marked 'pending' will be updated later in the day.")
+		fmt.Println("\nNote: 'pending' AQI values are published later in the day.")
 	}
+}
+
+// formatAQIDate turns AirNow's "2025-10-24" into "Fri Oct 24", leaving unparseable dates as-is.
+func formatAQIDate(d string) string {
+	d = strings.TrimSpace(d)
+	t, err := time.Parse("2006-01-02", d)
+	if err != nil {
+		return d
+	}
+	return t.Format("Mon Jan 2")
 }

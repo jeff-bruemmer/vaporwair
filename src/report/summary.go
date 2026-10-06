@@ -11,7 +11,7 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	// Show weather alerts first if any exist
 	WeatherAlerts(w)
 
-	WeeklySummary(w)
+	PeriodSummary(w)
 	DailySummary(w)
 	CurrentTemp(w)
 	MinTemp(w)

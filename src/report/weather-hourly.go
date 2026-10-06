@@ -13,37 +13,29 @@ func WeatherHourly(w weather.Forecast, a []air.Forecast) {
 		fmt.Println()
 	}
 
-	// Enhanced hourly table with additional NOAA fields
-	format := "%v\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%s\n"
-	fmt.Fprintf(TW, "Period\tTemp\tFeels\tDewpoint\tPrecip\tHumidity\tWind\tGust\n")
-	fmt.Fprintf(TW, "------\t----\t-----\t--------\t------\t--------\t----\t----\n")
-	d := LimitData(w.Hourly.Data, 12)
-	for _, h := range d {
+	// Units live in the second header row so cells hold bare numbers and the table fits 80 columns.
+	fmt.Fprintf(Table, "Time\tTemp\tFeels\tDew\tPrecip\tHumid\tWind\tGust\n")
+	fmt.Fprintf(Table, "\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		temperatureUnit, temperatureUnit, temperatureUnit, percentUnit, percentUnit, windSpeedUnit, windSpeedUnit)
+	for _, h := range LimitData(upcomingHours(w.Hourly.Data), DefaultHourlyLimit) {
 		gustStr := "-"
 		if h.WindGust > 0 {
-			gustStr = fmt.Sprintf("%.0f %s", h.WindGust, windSpeedUnit)
+			gustStr = fmt.Sprintf("%.0f", h.WindGust)
 		}
-		// Period name (e.g., "This Afternoon") is more descriptive than time alone
 		periodLabel := h.PeriodName
 		if periodLabel == "" {
 			periodLabel = FormatTime(h.Time)
 		}
 
-		// Calculate feels like temperature
-		feelsLike := h.ApparentTemperature
-		if feelsLike == 0 {
-			feelsLike = h.Temperature
-		}
-
-		fmt.Fprintf(TW, format,
+		fmt.Fprintf(Table, "%s\t%.0f\t%.0f\t%.0f\t%.0f\t%.0f\t%.0f\t%s\n",
 			periodLabel,
-			h.Temperature, temperatureUnit,
-			feelsLike, temperatureUnit,
-			h.DewPoint, temperatureUnit,
-			ToPercent(h.PrecipProbability), percentUnit,
-			ToPercent(h.Humidity), percentUnit,
-			h.WindSpeed, windSpeedUnit,
+			h.Temperature,
+			h.ApparentTemperature,
+			h.DewPoint,
+			ToPercent(h.PrecipProbability),
+			ToPercent(h.Humidity),
+			h.WindSpeed,
 			gustStr)
 	}
-	TW.Flush()
+	Table.Flush()
 }
