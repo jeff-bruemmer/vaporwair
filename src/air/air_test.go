@@ -1,7 +1,6 @@
 package air
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -35,68 +34,18 @@ func TestBuildAirNowURL(t *testing.T) {
 	}
 }
 
-// getSampleAirNowResponse returns sample AirNow API forecast data
-func getSampleAirNowResponse() []Forecast {
-	return []Forecast{
-		{
-			DateIssue:     "2025-10-24T00:00:00",
-			DateForecast:  "2025-10-24",
-			ReportingArea: "Los Angeles",
-			StateCode:     "CA",
-			Latitude:      34.0308,
-			Longitude:     -118.473,
-			ParameterName: "O3",
-			AQI:           55,
-			Category: Category{
-				Number: 2,
-				Name:   "Moderate",
-			},
-			ActionDay:  false,
-			Discussion: "Air quality is acceptable.",
-		},
-		{
-			DateIssue:     "2025-10-24T00:00:00",
-			DateForecast:  "2025-10-24",
-			ReportingArea: "Los Angeles",
-			StateCode:     "CA",
-			Latitude:      34.0308,
-			Longitude:     -118.473,
-			ParameterName: "PM2.5",
-			AQI:           45,
-			Category: Category{
-				Number: 1,
-				Name:   "Good",
-			},
-			ActionDay:  false,
-			Discussion: "Air quality is good.",
-		},
-		{
-			DateIssue:     "2025-10-24T00:00:00",
-			DateForecast:  "2025-10-25",
-			ReportingArea: "Los Angeles",
-			StateCode:     "CA",
-			Latitude:      34.0308,
-			Longitude:     -118.473,
-			ParameterName: "O3",
-			AQI:           62,
-			Category: Category{
-				Number: 2,
-				Name:   "Moderate",
-			},
-			ActionDay:  false,
-			Discussion: "Air quality is acceptable.",
-		},
-	}
-}
+// sampleAirNowResponse is sample JSON from the AirNow current forecast endpoint
+const sampleAirNowResponse = `[
+	{"dateIssue":"2025-10-24","dateValid":"2025-10-24","reportingArea":"Los Angeles","reportingAreaCode":"ca001","stateCode":"CA","parameterName":"OZONE","aqi":55,"forecastAgency":"South Coast AQMD","categoryNumber":2,"categoryName":"Moderate","actionDay":false,"discussion":"Air quality is acceptable."},
+	{"dateIssue":"2025-10-24","dateValid":"2025-10-24","reportingArea":"Los Angeles","reportingAreaCode":"ca001","stateCode":"CA","parameterName":"PM2.5","aqi":45,"forecastAgency":"South Coast AQMD","categoryNumber":1,"categoryName":"Good","actionDay":false,"discussion":"Air quality is good."},
+	{"dateIssue":"2025-10-24","dateValid":"2025-10-25","reportingArea":"Los Angeles","reportingAreaCode":"ca001","stateCode":"CA","parameterName":"OZONE","aqi":62,"forecastAgency":"South Coast AQMD","categoryNumber":2,"categoryName":"Moderate","actionDay":false,"discussion":"Air quality is acceptable."}
+]`
 
 func TestGetForecast_WithMockServer(t *testing.T) {
-	// Create sample response data
-	sampleData := getSampleAirNowResponse()
-
 	// Create a mock HTTP server that returns our sample data
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(sampleData)
+		w.Write([]byte(sampleAirNowResponse))
 	}))
 	defer server.Close()
 
@@ -109,8 +58,8 @@ func TestGetForecast_WithMockServer(t *testing.T) {
 	}
 
 	// Verify first forecast data
-	if forecasts[0].ParameterName != "O3" {
-		t.Errorf("Expected first parameter name 'O3', got '%s'", forecasts[0].ParameterName)
+	if forecasts[0].ParameterName != "OZONE" {
+		t.Errorf("Expected first parameter name 'OZONE', got '%s'", forecasts[0].ParameterName)
 	}
 
 	if forecasts[0].AQI != 55 {
@@ -119,6 +68,10 @@ func TestGetForecast_WithMockServer(t *testing.T) {
 
 	if forecasts[0].Category.Name != "Moderate" {
 		t.Errorf("Expected first category 'Moderate', got '%s'", forecasts[0].Category.Name)
+	}
+
+	if forecasts[0].Category.Number != 2 {
+		t.Errorf("Expected first category number 2, got %d", forecasts[0].Category.Number)
 	}
 
 	// Verify we have both today and tomorrow's forecasts
@@ -193,7 +146,7 @@ func TestAirQualityIntegration(t *testing.T) {
 
 		// Return sample air quality data
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(getSampleAirNowResponse())
+		w.Write([]byte(sampleAirNowResponse))
 	}))
 	defer server.Close()
 

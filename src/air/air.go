@@ -5,7 +5,9 @@ package air
 import (
 	"encoding/json"
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
+	"io"
 	"log"
+	"strings"
 )
 
 type Category struct {
@@ -27,7 +29,36 @@ type Forecast struct {
 	Discussion    string   `json:"Discussion"`
 }
 
-const AirNowAddress = "https://www.airnowapi.org/aq/observation/zipCode/current/?format=application/json&"
+// apiForecast mirrors the JSON returned by the AirNow current forecast endpoint.
+// It is converted to Forecast so report code and cached forecasts keep their shape.
+type apiForecast struct {
+	DateIssue      string `json:"dateIssue"`
+	DateValid      string `json:"dateValid"`
+	ReportingArea  string `json:"reportingArea"`
+	StateCode      string `json:"stateCode"`
+	ParameterName  string `json:"parameterName"`
+	AQI            int    `json:"aqi"`
+	CategoryNumber int    `json:"categoryNumber"`
+	CategoryName   string `json:"categoryName"`
+	ActionDay      bool   `json:"actionDay"`
+	Discussion     string `json:"discussion"`
+}
+
+func (a apiForecast) toForecast() Forecast {
+	return Forecast{
+		DateIssue:     a.DateIssue,
+		DateForecast:  a.DateValid,
+		ReportingArea: a.ReportingArea,
+		StateCode:     a.StateCode,
+		ParameterName: a.ParameterName,
+		AQI:           a.AQI,
+		Category:      Category{Number: a.CategoryNumber, Name: a.CategoryName},
+		ActionDay:     a.ActionDay,
+		Discussion:    a.Discussion,
+	}
+}
+
+const AirNowAddress = "https://www.airnowapi.org/aq/forecast/current/?format=application/json&"
 
 // BuildAirNowURL creates http address for dialer to call Air Now API.
 func BuildAirNowURL(addr string, zipCode string, apiKey string) string {
@@ -37,10 +68,10 @@ func BuildAirNowURL(addr string, zipCode string, apiKey string) string {
 		"&API_KEY=" + apiKey
 }
 
-// GetForecast dials AirNow API and returns a slice of Forecasts.
+// GetForecast dials the AirNow current forecast endpoint and returns a slice of Forecasts.
 // Returns an empty slice if no forecasts are available.
 func GetForecast(addr string) []Forecast {
-	var af []Forecast
+	var af []apiForecast
 
 	resp, err := dialer.NetReq(addr, 10, false)
 	if err != nil {
@@ -50,7 +81,8 @@ func GetForecast(addr string) []Forecast {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		log.Printf("Warning: AirNow API returned status %d - air quality data unavailable\n", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		log.Printf("Warning: AirNow API returned status %d - air quality data unavailable: %s\n", resp.StatusCode, strings.TrimSpace(string(body)))
 		return []Forecast{}
 	}
 
@@ -60,8 +92,9 @@ func GetForecast(addr string) []Forecast {
 		return []Forecast{}
 	}
 
-	if af == nil {
-		return []Forecast{}
+	forecasts := make([]Forecast, 0, len(af))
+	for _, f := range af {
+		forecasts = append(forecasts, f.toForecast())
 	}
-	return af
+	return forecasts
 }
