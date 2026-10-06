@@ -1,4 +1,4 @@
-// This package handles data from IPAPI requests, which uses IP addresses to
+// This package handles data from ipwho.is requests, which uses IP addresses to
 // obtain geolocation coordinates.
 package geolocation
 
@@ -35,7 +35,7 @@ type GeoData struct {
 }
 
 // Use HTTPS to protect against MITM attacks that could leak location data
-const IPAPIAddress = "https://ip-api.com/json"
+const IPAPIAddress = "https://ipwho.is/"
 const ZipCodeAPIAddress = "https://api.zippopotam.us/us/"
 
 // trimCoordinates drops trailing zeroes from coordinate strings
@@ -68,30 +68,62 @@ type ZipCodeResponse struct {
 	} `json:"places"`
 }
 
-// GetGeoData dials the IP-API server to obtain geolocation data
+// ipWhoResponse represents the response from the ipwho.is API
+type ipWhoResponse struct {
+	Success     bool    `json:"success"`
+	Message     string  `json:"message"`
+	IP          string  `json:"ip"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"country_code"`
+	Region      string  `json:"region"`
+	RegionCode  string  `json:"region_code"`
+	City        string  `json:"city"`
+	Postal      string  `json:"postal"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+}
+
+// GetGeoData dials the ipwho.is server to obtain geolocation data
 // based on user's IP address.
 func GetGeoData(addr string) (GeoData, error) {
 	var gd GeoData
-	// Request coordinates from ip-api and specify timeout in seconds
+	// Request coordinates from ipwho.is and specify timeout in seconds
 	resp, err := dialer.NetReq(addr, 5, false)
 	if err != nil {
 		return gd, fmt.Errorf("failed to connect to IP geolocation service (%s): %w", addr, err)
 	}
 	defer resp.Body.Close()
 
-	// Check HTTP status code
+	var ipResp ipWhoResponse
+	decodeErr := json.NewDecoder(resp.Body).Decode(&ipResp)
+
+	// Check HTTP status code, including the service's message when available
 	if resp.StatusCode != 200 {
+		if decodeErr == nil && ipResp.Message != "" {
+			return gd, fmt.Errorf("IP geolocation service returned error status %d: %s", resp.StatusCode, ipResp.Message)
+		}
 		return gd, fmt.Errorf("IP geolocation service returned error status %d", resp.StatusCode)
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(&gd)
-	if err != nil {
-		return gd, fmt.Errorf("failed to parse geolocation response: %w", err)
+	if decodeErr != nil {
+		return gd, fmt.Errorf("failed to parse geolocation response: %w", decodeErr)
 	}
 
-	if gd.Status == "fail" {
-		return gd, fmt.Errorf("geolocation service could not determine location from your IP address")
+	if !ipResp.Success {
+		return gd, fmt.Errorf("geolocation service could not determine location from your IP address: %s", ipResp.Message)
 	}
+
+	// Convert to GeoData format
+	gd.Status = "success"
+	gd.Country = ipResp.Country
+	gd.CountryCode = ipResp.CountryCode
+	gd.Region = ipResp.RegionCode
+	gd.RegionName = ipResp.Region
+	gd.City = ipResp.City
+	gd.Zip = ipResp.Postal
+	gd.Lat = ipResp.Latitude
+	gd.Lon = ipResp.Longitude
+	gd.Query = ipResp.IP
 	return gd, nil
 }
 

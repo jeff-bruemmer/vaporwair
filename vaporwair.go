@@ -98,7 +98,7 @@ func RunReports(f weather.Forecast, a []air.Forecast) {
 func getIPGeoData() geolocation.GeoData {
 	geoData, err := geolocation.GetGeoData(geolocation.IPAPIAddress)
 	if err != nil {
-		log.Fatalf("Failed to determine location from IP address: %v\nPlease check your internet connection.", err)
+		log.Fatalf("Failed to determine location from IP address: %v\nTry specifying a location with -zip <code>.", err)
 	}
 	return geoData
 }

@@ -6,7 +6,7 @@ Contains the data structures and utilities for retrieving forecasts from the Air
 Handles calls for all API requests.
 
 ## geolocation
-Handles data from IPAPI requests, which uses IP addresses to obtain geolocation coordinates.
+Handles data from ipwho.is requests, which uses IP addresses to obtain geolocation coordinates.
 
 ## report
 Formats data from API calls into specific reports for display in terminal.

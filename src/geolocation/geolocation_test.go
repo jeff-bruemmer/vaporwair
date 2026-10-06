@@ -22,26 +22,22 @@ func TestIPAPIUsesHTTPS(t *testing.T) {
 // Validates full flow with HTTP(S) works correctly
 func TestGetGeoDataWithMockServer(t *testing.T) {
 	// Create mock HTTP server (note: httptest uses HTTP, but we test the data flow)
-	sampleGeoData := GeoData{
-		Status:      "success",
+	sampleResponse := ipWhoResponse{
+		Success:     true,
+		IP:          "192.168.1.1",
 		Country:     "United States",
 		CountryCode: "US",
-		Region:      "CA",
-		RegionName:  "California",
+		Region:      "California",
+		RegionCode:  "CA",
 		City:        "Los Angeles",
-		Zip:         "90001",
-		Lat:         34.0522,
-		Lon:         -118.2437,
-		Timezone:    "America/Los_Angeles",
-		Isp:         "Test ISP",
-		Org:         "Test Org",
-		As:          "AS12345 Test",
-		Query:       "192.168.1.1",
+		Postal:      "90001",
+		Latitude:    34.0522,
+		Longitude:   -118.2437,
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(sampleGeoData)
+		json.NewEncoder(w).Encode(sampleResponse)
 	}))
 	defer server.Close()
 
@@ -63,6 +59,12 @@ func TestGetGeoDataWithMockServer(t *testing.T) {
 	}
 	if geoData.Lon != -118.2437 {
 		t.Errorf("Longitude mismatch: got %f, want -118.2437", geoData.Lon)
+	}
+	if geoData.Zip != "90001" {
+		t.Errorf("Zip mismatch: got %s, want 90001", geoData.Zip)
+	}
+	if geoData.Region != "CA" || geoData.RegionName != "California" {
+		t.Errorf("Region mismatch: got %s/%s, want CA/California", geoData.Region, geoData.RegionName)
 	}
 }
 
@@ -90,7 +92,7 @@ func TestGetGeoDataErrors(t *testing.T) {
 		{
 			name:         "Fail status in response",
 			responseCode: 200,
-			responseBody: `{"status":"fail","message":"error"}`,
+			responseBody: `{"success":false,"message":"error"}`,
 			expectError:  true,
 		},
 	}
