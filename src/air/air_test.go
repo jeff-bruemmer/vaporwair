@@ -16,7 +16,12 @@ const exKey = "Key"
 const exCity = "City"
 const exZip = "Zip"
 
-var exCoordinates = geolocation.Coordinates{exLatitude, exLongitude, exCity, exZip}
+var exCoordinates = geolocation.Coordinates{
+	Latitude:  exLatitude,
+	Longitude: exLongitude,
+	City:      exCity,
+	Zip:       exZip,
+}
 
 func TestBuildAirNowURL(t *testing.T) {
 	got := BuildAirNowURL(AirNowAddress, exZip, exKey)
