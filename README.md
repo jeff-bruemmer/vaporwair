@@ -1,8 +1,8 @@
-# Vaporwair
+# V A P O R W A I R
 
-Fast weather and air quality reports in your terminal.
+Vaporwair delivers fast weather and air quality reports in your terminal.
 
-> Vaporwair uses the free [National Weather Service API](https://www.weather.gov/documentation/services-web-api) for weather forecasts. No API key required for weather data!
+> Vaporwair uses the free [National Weather Service API](https://www.weather.gov/documentation/services-web-api) for weather forecasts.
 
 ## About Vaporwair
 
@@ -200,7 +200,7 @@ Air quality forecasts may not be available early in the day; AirNow typically pu
 
 ### Clothing Recommendations (`vaporwair clothing`)
 
-The outfit is chosen for the coldest it will *feel* (wind chill included) for the rest of the day: until midnight, at most 12 hours ahead and at least 3. `>` marks the recommended tier. Tips are ordered by importance, so health warnings such as unhealthy air come first.
+The outfit is chosen for the coldest it will _feel_ (wind chill included) for the rest of the day: until midnight, at most 12 hours ahead and at least 3. `>` marks the recommended tier. Tips are ordered by importance, so health warnings such as unhealthy air come first.
 
 ```
 $ vaporwair clothing
@@ -274,17 +274,20 @@ $ vaporwair clothing -zip=33101 # Miami, FL (clothing recommendations)
 ```
 
 **Default Zip Code Behavior:**
+
 - When you use `-zip`, that zip code is automatically saved as your default location (Vaporwair prints a note on stderr when the default changes)
 - Subsequent runs will use the saved zip code instead of IP-based geolocation
 - To return to IP-based location permanently, run `vaporwair -zip=ip`, which clears the saved default
 - Using a different `-zip` flag updates your default to the new location
 
 **Temporary Location Override:**
+
 - Use `-current` to temporarily get weather for your current IP-based location
 - This does NOT clear or change your saved default zip code
 - Useful for travelers who want to check local conditions without changing their home location
 
 **Example workflow:**
+
 ```bash
 $ vaporwair -zip=10001     # Sets default to NYC, shows NYC weather
 $ vaporwair                # Now shows NYC weather (using saved default)
@@ -298,6 +301,7 @@ $ vaporwair -zip=ip        # Clears the default; IP-based location from now on
 ## How Vaporwair works
 
 Vaporwair obtains coordinates using a priority system:
+
 1. `-current` flag: Uses your current IP-based location (temporary override)
 2. `-zip` flag: Uses the specified zip code and saves it as default
 3. Saved default zip code: Uses the last zip code you specified
