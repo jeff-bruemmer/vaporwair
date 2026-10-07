@@ -137,7 +137,7 @@ func TestReportsAreASCII(t *testing.T) {
 // Tables must fit an 80-column terminal.
 func TestTablesFit80Columns(t *testing.T) {
 	w, a := fixtureForecast()
-	for _, name := range []string{"hourly", "week", "air"} {
+	for _, name := range []string{"hourly", "week", "daily", "air"} {
 		out := capture(t, func() { allReports()[name](w, a) })
 		for _, line := range strings.Split(out, "\n") {
 			if n := utf8.RuneCountInString(line); n > MaxReportWidth {
@@ -180,5 +180,150 @@ func TestClothingUsesColdestFeelsLike(t *testing.T) {
 	}
 	if rec.Outfit != OutfitDescExtremeCold {
 		t.Errorf("expected extreme cold outfit for sub-zero feels-like, got %q", rec.Outfit)
+	}
+}
+
+// Gust columns appear only when some row has a gust.
+func TestGustColumnOnlyWithGusts(t *testing.T) {
+	w, a := fixtureForecast()
+	for _, name := range []string{"hourly", "week"} {
+		if out := capture(t, func() { allReports()[name](w, a) }); !strings.Contains(out, "Gust") {
+			t.Errorf("%s: fixture has gusts but no Gust column:\n%s", name, out)
+		}
+	}
+	for i := range w.Hourly.Data {
+		w.Hourly.Data[i].WindGust = 0
+	}
+	for i := range w.Daily.Data {
+		w.Daily.Data[i].WindGust = 0
+	}
+	for _, name := range []string{"hourly", "week"} {
+		if out := capture(t, func() { allReports()[name](w, a) }); strings.Contains(out, "Gust") {
+			t.Errorf("%s: no gusts but a Gust column:\n%s", name, out)
+		}
+	}
+}
+
+func TestHourlyHasConditions(t *testing.T) {
+	w, a := fixtureForecast()
+	out := capture(t, func() { WeatherHourly(w, a) })
+	if !strings.Contains(out, "Conditions") || strings.Count(out, "Chance Light Snow") != 1 {
+		t.Errorf("want a Conditions column showing an unchanged summary once:\n%s", out)
+	}
+}
+
+// The daily report shows each narrative once, and every day's values start in the same column.
+func TestDailyAlignedWithoutRepeats(t *testing.T) {
+	w, a := fixtureForecast()
+	w.Daily.Data[0].DetailedForecast = w.Daily.Summary // as NOAA sends it
+	w.Daily.Data[3].PrecipType = ""                    // a longer "Precipitation Chance" label on one day
+	out := capture(t, func() { WeatherDaily(w, a) })
+	if n := strings.Count(out, "Snow likely, mainly after 1pm"); n != 1 {
+		t.Errorf("first day's forecast appears %d times:\n%s", n, out)
+	}
+	col := -1
+	for _, line := range strings.Split(out, "\n") {
+		label, rest, ok := strings.Cut(line, ":")
+		if !ok || strings.HasPrefix(line, " ") {
+			continue
+		}
+		start := len(label) + 1 + len(rest) - len(strings.TrimLeft(rest, " "))
+		if col == -1 {
+			col = start
+		} else if start != col {
+			t.Errorf("value starts at column %d, want %d: %q", start, col, line)
+		}
+	}
+}
+
+// Insights uses the standard labels and leaves pressure and visibility to the daily report.
+func TestInsightsLabels(t *testing.T) {
+	w, a := fixtureForecast()
+	out := capture(t, func() { InsightsReport(w, a) })
+	for _, want := range []string{"Temperature:", "Wind:", "Snow Chance:", "Air Quality:  ", "155 AQI (PM2.5) - Unhealthy !"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("insights missing %q:\n%s", want, out)
+		}
+	}
+	for _, bad := range []string{"Windspeed", "Air Quality Index", "Current Temperature", "Probability", "Pressure:", "Visibility:"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("insights has %q:\n%s", bad, out)
+		}
+	}
+}
+
+// A low precipitation chance is noise in Insights' list.
+func TestInsightsHidesLowPrecipChance(t *testing.T) {
+	w, a := fixtureForecast()
+	w.Daily.Data[0].PrecipProbability = 0.01
+	if out := capture(t, func() { InsightsReport(w, a) }); strings.Contains(out, "Snow Chance:") {
+		t.Errorf("insights shows a 1%% chance:\n%s", out)
+	}
+}
+
+// Summary is a glance: a few labeled lines with the air quality and alert headline.
+func TestSummaryIsGlance(t *testing.T) {
+	w, a := fixtureForecast()
+	out := strings.TrimSpace(capture(t, func() { Summary(w, a) }))
+	if n := len(strings.Split(out, "\n")); n > 7 {
+		t.Errorf("summary is %d lines, want at most 7:\n%s", n, out)
+	}
+	for _, want := range []string{"Now:", "10F (feels -2F)", "High / Low:", "Outfit:", "Air Quality:  155 AQI (PM2.5) - Unhealthy !", "! WINTER STORM WARNING"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("summary missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// Pointer lines to fuller reports align with the label column above them.
+func TestPointersAligned(t *testing.T) {
+	w, a := fixtureForecast()
+	out := capture(t, func() { InsightsReport(w, a) })
+	for _, want := range []string{"Details:  vaporwair alerts", "More:     vaporwair clothing"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("insights missing aligned %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "-c flag") {
+		t.Errorf("insights points to the removed -c flag:\n%s", out)
+	}
+}
+
+// Next Few Hours uses the hourly report's columns, with Conditions last.
+func TestNextHoursMatchesHourlyColumns(t *testing.T) {
+	w, a := fixtureForecast()
+	out := capture(t, func() { InsightsReport(w, a) })
+	if !strings.Contains(out, "Time   Temp  Feels  Precip  Wind   Gust  Conditions") {
+		t.Errorf("unexpected Next Few Hours header:\n%s", out)
+	}
+}
+
+// Each day's pollutants are sorted, so rows line up from day to day.
+func TestAirPollutantsSorted(t *testing.T) {
+	w, _ := fixtureForecast()
+	today := time.Now().Format("2006-01-02")
+	a := []air.Forecast{
+		{DateForecast: today, ParameterName: "PM2.5", AQI: 25, Category: air.Category{Name: "Good"}},
+		{DateForecast: today, ParameterName: "OZONE", AQI: 30, Category: air.Category{Name: "Good"}},
+	}
+	out := capture(t, func() { AirQuality(w, a) })
+	if strings.Index(out, "OZONE") > strings.Index(out, "PM2.5") {
+		t.Errorf("pollutants not sorted:\n%s", out)
+	}
+	if strings.Contains(out, "---") {
+		t.Errorf("air report still uses dashed headers:\n%s", out)
+	}
+}
+
+// Insights shows a short alert; the alerts report has the full text.
+func TestInsightsAlertIsShort(t *testing.T) {
+	w, a := fixtureForecast()
+	out := capture(t, func() { InsightsReport(w, a) })
+	if !strings.Contains(out, "What:") || strings.Contains(out, "Where:") || !strings.Contains(out, "vaporwair alerts") {
+		t.Errorf("want What only and a pointer to the alerts report:\n%s", out)
+	}
+	full := capture(t, func() { WeatherAlertsReport(w, a) })
+	if !strings.Contains(full, "Where:") {
+		t.Errorf("alerts report lost the Where section:\n%s", full)
 	}
 }

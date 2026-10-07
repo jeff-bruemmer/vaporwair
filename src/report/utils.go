@@ -18,7 +18,7 @@ func GetCurrentHourlyData(w weather.Forecast) weather.DataPoint {
 		return w.Currently
 	}
 
-	currentTime := float64(time.Now().Unix())
+	currentTime := float64(clock().Unix())
 	for _, hour := range w.Hourly.Data {
 		if hour.Time <= currentTime && currentTime < hour.Time+3600 {
 			return hour
@@ -229,22 +229,16 @@ func ParseNWSDescription(desc string) []LabeledText {
 // FormatUntil formats a future time as clock time with a relative offset, e.g. "Wed 05:00 (in 15h)".
 // The weekday is omitted when t falls on the same day as now.
 func FormatUntil(t, now time.Time) string {
-	clock := t.Format("15:04")
+	at := t.Format("15:04")
 	if t.YearDay() != now.YearDay() || t.Year() != now.Year() {
-		clock = t.Format("Mon 15:04")
+		at = t.Format("Mon 15:04")
 	}
 
 	d := t.Sub(now)
-	switch {
-	case d <= 0:
-		return clock
-	case d < time.Hour:
-		return fmt.Sprintf("%s (in %dm)", clock, int(d.Minutes()))
-	case d < 48*time.Hour:
-		return fmt.Sprintf("%s (in %dh)", clock, int(d.Hours()))
-	default:
-		return fmt.Sprintf("%s (in %dd)", clock, int(d.Hours()/24))
+	if d <= 0 {
+		return at
 	}
+	return fmt.Sprintf("%s (in %s)", at, FormatDuration(d))
 }
 
 // AlertHeadline marks an alert title in plain ASCII, e.g. "! WINTER STORM WARNING".
@@ -270,31 +264,100 @@ func AQICategory(name string) string {
 	return name
 }
 
-// FeelsLikeRange returns the coldest feels-like and warmest actual temperature over
-// the next `hours` hours of hourly data, including the current hour. It falls back to
-// today's daily low and high when no upcoming hours are available.
-func FeelsLikeRange(w weather.Forecast, hours int) (coldest, warmest float64) {
-	cutoff := float64(time.Now().Add(-time.Hour).Unix())
-	n := 0
-	for _, h := range w.Hourly.Data {
-		if h.Time <= cutoff {
-			continue
-		}
-		if n == 0 || h.ApparentTemperature < coldest {
-			coldest = h.ApparentTemperature
-		}
-		if n == 0 || h.Temperature > warmest {
-			warmest = h.Temperature
-		}
-		n++
-		if n == hours {
+// clock is the report's notion of now; tests replace it to render a fixed time of day.
+var clock = time.Now
+
+// clothingWindowEnd is when the hours you'd dress for end: midnight, so an evening
+// recommendation isn't driven by tomorrow's pre-dawn low. Late at night the window
+// still spans at least ClothingMinHours, and never more than ClothingHours.
+func clothingWindowEnd(now time.Time) time.Time {
+	midnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	end := min(midnight.Unix(), now.Add(ClothingHours*time.Hour).Unix())
+	end = max(end, now.Add(ClothingMinHours*time.Hour).Unix())
+	return time.Unix(end, 0).In(now.Location())
+}
+
+// windowHours returns the hourly data points from the hour in progress up to end.
+func windowHours(w weather.Forecast, end time.Time) []weather.DataPoint {
+	var hours []weather.DataPoint
+	for _, h := range upcomingHours(w.Hourly.Data) {
+		if h.Time >= float64(end.Unix()) {
 			break
 		}
+		hours = append(hours, h)
 	}
-	if n == 0 && len(w.Daily.Data) > 0 {
-		return w.Daily.Data[0].TemperatureMin, w.Daily.Data[0].TemperatureMax
+	return hours
+}
+
+// FeelsLikeRange returns the coldest feels-like temperature (and the hour it occurs)
+// and the warmest actual temperature over hours. It falls back to the first daily
+// period's low and high, with a zero coldestAt, when hours is empty.
+func FeelsLikeRange(w weather.Forecast, hours []weather.DataPoint) (coldest, warmest, coldestAt float64) {
+	if len(hours) == 0 {
+		if len(w.Daily.Data) > 0 {
+			return w.Daily.Data[0].TemperatureMin, w.Daily.Data[0].TemperatureMax, 0
+		}
+		return 0, 0, 0
 	}
-	return coldest, warmest
+	coldest, warmest, coldestAt = hours[0].ApparentTemperature, hours[0].Temperature, hours[0].Time
+	for _, h := range hours[1:] {
+		if h.ApparentTemperature < coldest {
+			coldest, coldestAt = h.ApparentTemperature, h.Time
+		}
+		warmest = max(warmest, h.Temperature)
+	}
+	return coldest, warmest, coldestAt
+}
+
+// IsNightPeriod reports whether a NOAA period name is an overnight period ("Tonight",
+// "Overnight"). After about 6pm NOAA's first period is one, and it has no daytime high.
+func IsNightPeriod(name string) bool {
+	return name == "Tonight" || name == "Overnight" || strings.HasSuffix(name, " Night")
+}
+
+// FormatAlertWindow describes when an alert applies relative to now:
+// "until Wed 05:00 (in 9h)" once it is in effect, or "Wed 00:00-05:00 (starts in 4h)"
+// before its onset. A zero onset or expiry is left out.
+func FormatAlertWindow(onset, expires, now time.Time) string {
+	if onset.IsZero() || !onset.After(now) {
+		if expires.IsZero() {
+			return ""
+		}
+		return "until " + FormatUntil(expires, now)
+	}
+	start := onset.Format("15:04")
+	if onset.YearDay() != now.YearDay() || onset.Year() != now.Year() {
+		start = onset.Format("Mon 15:04")
+	}
+	window := start
+	if !expires.IsZero() {
+		end := expires.Format("15:04")
+		if expires.YearDay() != onset.YearDay() || expires.Year() != onset.Year() {
+			end = expires.Format("Mon 15:04")
+		}
+		window += "-" + end
+	}
+	return fmt.Sprintf("%s (starts in %s)", window, FormatDuration(onset.Sub(now)))
+}
+
+// unixOrZero converts a Unix timestamp to a time, mapping 0 (missing) to the zero time.
+func unixOrZero(t float64) time.Time {
+	if t <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(int64(t), 0)
+}
+
+// FormatDuration renders a positive duration compactly: "45m", "4h", "2d".
+func FormatDuration(d time.Duration) string {
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
 }
 
 // Truncate shortens s to at most n runes, ending in "..." when cut.
@@ -311,7 +374,7 @@ func Truncate(s string, n int) string {
 
 // upcomingHours drops hours that have already ended; NOAA's hourly feed can lag by an hour or two.
 func upcomingHours(data []weather.DataPoint) []weather.DataPoint {
-	hourStart := float64(time.Now().Add(-time.Hour).Unix())
+	hourStart := float64(clock().Add(-time.Hour).Unix())
 	for i, h := range data {
 		if h.Time > hourStart {
 			return data[i:]

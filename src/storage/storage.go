@@ -18,12 +18,12 @@ import (
 
 // Application configuration and caching constants.
 const (
-	VaporwairDir           = "/.vaporwair/"
-	SavedWeatherFileName   = VaporwairDir + "weather-forecast.json"
-	SavedAirFileName       = VaporwairDir + "air-forecast.json"
-	ConfigFileName         = VaporwairDir + "config.json"
-	SavedCallFileName      = VaporwairDir + "last-call.json"
-	CacheTimeoutMinutes    = 5
+	VaporwairDir         = "/.vaporwair/"
+	SavedWeatherFileName = VaporwairDir + "weather-forecast.json"
+	SavedAirFileName     = VaporwairDir + "air-forecast.json"
+	ConfigFileName       = VaporwairDir + "config.json"
+	SavedCallFileName    = VaporwairDir + "last-call.json"
+	CacheTimeoutMinutes  = 5
 )
 
 // Config stores API keys and settings (NOAA doesn't require an API key).
@@ -34,8 +34,8 @@ type Config struct {
 
 // AppConfig holds runtime configuration for the application.
 type AppConfig struct {
-	Config             Config
-	HomeDir            string
+	Config              Config
+	HomeDir             string
 	CacheTimeoutMinutes float64
 	// FirstRun is true when this run created the config file.
 	FirstRun bool
@@ -54,10 +54,14 @@ func GetHomeDir() (string, error) {
 	return usr.HomeDir, err
 }
 
-// Capture takes a prompt and returns user-entered string.
+// Capture takes a prompt and returns user-entered string. The prompt goes to stderr so it
+// never lands in a piped report, and with no terminal on stdin it returns "" without asking.
 func Capture(prompt string) string {
+	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return ""
+	}
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print(prompt)
+	fmt.Fprint(os.Stderr, prompt)
 	text, _ := reader.ReadString('\n')
 	return strings.TrimSpace(text)
 }
@@ -68,14 +72,14 @@ func CreateConfig(homeDir, anak string) error {
 	config.AirNowAPIKey = anak
 	c, err := json.Marshal(config)
 	if err != nil {
-		fmt.Println("There was an error marshalling the configuration.")
+		fmt.Fprintln(os.Stderr, "There was an error marshalling the configuration.")
 		return err
 	}
 	// Use 0600 permissions for config file (contains API keys)
 	// os.WriteFile will create the file if it doesn't exist
 	err = os.WriteFile(path, c, 0600)
 	if err != nil {
-		fmt.Println("There was an error writing the config file to ", path)
+		fmt.Fprintln(os.Stderr, "There was an error writing the config file to ", path)
 		return err
 	}
 	return nil
@@ -100,29 +104,29 @@ func CreateVaporwairDir(path string) {
 }
 
 // Loads previous weather forecast.
+// A missing or unreadable cache is an error for the caller to handle, not a fatal one.
 func LoadSavedWeather(path string) (weather.Forecast, error) {
 	var f weather.Forecast
 	b, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Println("Error reading forecast from disk.", err)
+		return f, err
 	}
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Fatal("Error unmarshalling json into Forecast.", err)
+	if err := json.Unmarshal(b, &f); err != nil {
+		return f, fmt.Errorf("reading cached forecast %s: %w", path, err)
 	}
 	return f, nil
 }
 
 // Loads previous air quality forecast.
+// A missing or unreadable cache is an error for the caller to handle, not a fatal one.
 func LoadSavedAir(path string) ([]air.Forecast, error) {
 	var f []air.Forecast
 	b, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Println("Error reading forecast from disk.", err)
+		return f, err
 	}
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Fatal("Error unmarshalling json into Forecast.", err)
+	if err := json.Unmarshal(b, &f); err != nil {
+		return f, fmt.Errorf("reading cached forecast %s: %w", path, err)
 	}
 	return f, nil
 }
@@ -131,7 +135,7 @@ func LoadSavedAir(path string) ([]air.Forecast, error) {
 func GetConfig(filepath string) Config {
 	configFile, err := os.Open(filepath)
 	if err != nil {
-		fmt.Println("Could not find config file in home directory.")
+		fmt.Fprintln(os.Stderr, "Could not find config file in home directory.")
 		log.Fatal(err)
 	}
 	defer configFile.Close()
@@ -217,7 +221,7 @@ func UpdateLastCall(c geolocation.Coordinates, path string) error {
 	}
 	err := SaveCall(path, newCallInfo)
 	if err != nil {
-		fmt.Println("Error saving call info.\n", err)
+		fmt.Fprintln(os.Stderr, "Error saving call info.\n", err)
 		return err
 	} else {
 		return nil
@@ -234,7 +238,6 @@ func LoadCallInfo(path string) (APICallInfo, error) {
 	}
 	err = json.Unmarshal(f, &lastCall)
 	if err != nil {
-		fmt.Println("Error unmarshalling last api call.\n", err)
 		return lastCall, err
 	}
 	return lastCall, nil
@@ -267,7 +270,7 @@ func saveJSON(path string, data any, perm os.FileMode) error {
 func SaveWeatherForecast(path string, f weather.Forecast) bool {
 	err := saveJSON(path, f, 0644)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return false
 	}
 	return true
@@ -276,7 +279,7 @@ func SaveWeatherForecast(path string, f weather.Forecast) bool {
 func SaveAirForecast(path string, a []air.Forecast) bool {
 	err := saveJSON(path, a, 0644)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return false
 	}
 	return true

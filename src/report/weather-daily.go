@@ -10,85 +10,89 @@ import (
 )
 
 // WeatherDaily displays comprehensive daily forecast with all available NOAA fields.
+// There is no overall summary on top: NOAA's is the first day's forecast, shown below.
 func WeatherDaily(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Daily Forecast"))
 
-	// Show overall summary if available
-	if w.Daily.Summary != "" {
-		fmt.Println(AddPeriod(w.Daily.Summary))
-		fmt.Println()
-	}
-
 	data := LimitData(w.Daily.Data, 7)
+
+	// Collect every day's fields first, so all days share one label column.
+	// tabwriter sizes each flush separately, which made the columns shift from day to day.
+	days := make([][]LabeledText, len(data))
+	labelWidth := minwidth
+	for i, day := range data {
+		days[i] = dailyFields(day)
+		for _, f := range days[i] {
+			labelWidth = max(labelWidth, len(f.Label)+1+padding)
+		}
+	}
+	wrapWidth := max(ReportWidth-labelWidth, 30)
+	indent := strings.Repeat(" ", labelWidth)
 
 	for i, day := range data {
 		if i > 0 {
 			fmt.Println()
 		}
 
-		// Day header
 		dayLabel := day.PeriodName
 		if dayLabel == "" {
 			dayLabel = time.Unix(int64(day.Time), 0).Format("Monday, Jan 2")
 		}
 		fmt.Println(Bold(dayLabel))
 
-		// Temperature information (0F and below are real readings, so no "> 0" guards)
-		fmt.Fprintf(TW, formatValueWithUnit, "High", day.TemperatureMax, temperatureUnit)
-		fmt.Fprintf(TW, formatValueWithUnit, "Low", day.TemperatureMin, temperatureUnit)
-		if day.TemperatureTrend != "" {
-			fmt.Fprintf(TW, formatString, "Temperature Trend", day.TemperatureTrend)
+		for _, f := range days[i] {
+			lines := WrapText(f.Text, wrapWidth)
+			fmt.Printf("%-*s%s\n", labelWidth, f.Label+":", strings.Join(lines, "\n"+indent))
 		}
-
-		// Precipitation
-		if day.PrecipProbability > 0 {
-			precipType := day.PrecipType
-			if precipType != "" {
-				fmt.Fprintf(TW, "%s Chance:\t%.0f%s\n",
-					CapitalizeFirst(precipType),
-					ToPercent(day.PrecipProbability),
-					percentUnit)
-			} else {
-				fmt.Fprintf(TW, formatValueWithUnit, "Precipitation Chance",
-					ToPercent(day.PrecipProbability), percentUnit)
-			}
-		}
-
-		// Wind information
-		if day.WindSpeed > 0 {
-			windStr := FormatWindString(day.WindSpeed, day.WindBearing, day.WindGust, windSpeedUnit, true)
-			fmt.Fprintf(TW, "Wind:\t%s\n", windStr)
-		}
-
-		// Humidity and dewpoint
-		if day.Humidity > 0 {
-			fmt.Fprintf(TW, formatValueWithUnit, "Humidity",
-				ToPercent(day.Humidity), percentUnit)
-		}
-		// NOAA's daily periods usually omit dewpoint (stored as 0). A converted Celsius
-		// reading is essentially never exactly 0F, so 0 here means missing.
-		if day.DewPoint != 0 {
-			fmt.Fprintf(TW, formatValueWithUnit, "Dewpoint", day.DewPoint, temperatureUnit)
-		}
-
-		// Pressure and visibility come from a live observation, so only today has them
-		if day.Pressure > 0 {
-			fmt.Fprintf(TW, formatPressure, "Pressure", day.Pressure, pressureUnit)
-		}
-		if day.Visibility > 0 {
-			fmt.Fprintf(TW, formatValueWithWordUnit, "Visibility", day.Visibility, distanceUnit)
-		}
-
-		// Detailed forecast, in the same flush so it aligns with the fields above
-		if day.DetailedForecast != "" {
-			maxWidth := calculateValueColumnWidth("Forecast")
-			wrappedForecast := strings.Join(WrapText(AddPeriod(day.DetailedForecast), maxWidth), "\n\t")
-			fmt.Fprintf(TW, formatString, "Forecast", wrappedForecast)
-		} else if day.Summary != "" {
-			maxWidth := calculateValueColumnWidth("Summary")
-			wrappedSummary := strings.Join(WrapText(AddPeriod(day.Summary), maxWidth), "\n\t")
-			fmt.Fprintf(TW, formatString, "Summary", wrappedSummary)
-		}
-		TW.Flush()
 	}
+}
+
+// dailyFields returns one day's labeled values, in display order.
+func dailyFields(day weather.DataPoint) []LabeledText {
+	var fields []LabeledText
+	add := func(label, format string, args ...any) {
+		fields = append(fields, LabeledText{Label: label, Text: fmt.Sprintf(format, args...)})
+	}
+
+	// Temperature information (0F and below are real readings, so no "> 0" guards).
+	// A night period has no daytime high; NOAA's value is just the warmest hour left.
+	if !IsNightPeriod(day.PeriodName) {
+		add("High", "%.0f%s", day.TemperatureMax, temperatureUnit)
+	}
+	add("Low", "%.0f%s", day.TemperatureMin, temperatureUnit)
+	if day.TemperatureTrend != "" {
+		add("Temperature Trend", "%s", day.TemperatureTrend)
+	}
+
+	if day.PrecipProbability > 0 {
+		add(GetPrecipTypeOrDefault(day.PrecipType)+" Chance", "%.0f%s", ToPercent(day.PrecipProbability), percentUnit)
+	}
+
+	if day.WindSpeed > 0 {
+		add("Wind", "%s", FormatWindString(day.WindSpeed, day.WindBearing, day.WindGust, windSpeedUnit, true))
+	}
+
+	if day.Humidity > 0 {
+		add("Humidity", "%.0f%s", ToPercent(day.Humidity), percentUnit)
+	}
+	// NOAA's daily periods usually omit dewpoint (stored as 0). A converted Celsius
+	// reading is essentially never exactly 0F, so 0 here means missing.
+	if day.DewPoint != 0 {
+		add("Dewpoint", "%.0f%s", day.DewPoint, temperatureUnit)
+	}
+
+	// Pressure and visibility come from a live observation, so only today has them
+	if day.Pressure > 0 {
+		add("Pressure", "%.2f %s", day.Pressure, pressureUnit)
+	}
+	if day.Visibility > 0 {
+		add("Visibility", "%.0f %s", day.Visibility, distanceUnit)
+	}
+
+	if day.DetailedForecast != "" {
+		add("Forecast", "%s", AddPeriod(day.DetailedForecast))
+	} else if day.Summary != "" {
+		add("Summary", "%s", AddPeriod(day.Summary))
+	}
+	return fields
 }

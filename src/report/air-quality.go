@@ -1,7 +1,9 @@
 package report
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,18 +28,24 @@ func AirQuality(w weather.Forecast, a []air.Forecast) {
 		return
 	}
 
-	// Fixed-width columns so every date's rows line up under one header.
-	// Pollutant names from AirNow are short (O3, OZONE, PM2.5, PM10, NO2, CO).
-	row := "  %-9s  %7s  %s\n"
+	// Same layout as the other tables: the date shows once per day, and each day's
+	// pollutants are sorted by name so rows line up from one day to the next.
+	rows := slices.Clone(a)
+	slices.SortStableFunc(rows, func(x, y air.Forecast) int {
+		return cmp.Or(
+			cmp.Compare(strings.TrimSpace(x.DateForecast), strings.TrimSpace(y.DateForecast)),
+			cmp.Compare(x.ParameterName, y.ParameterName))
+	})
+	printTableHeader([]column{{"Day", ""}, {"Pollutant", ""}, {"AQI", ""}, {"Category", ""}})
 	anyPending := false
-	date := ""
-	fmt.Printf(row, "Pollutant", "AQI", "Category")
-	fmt.Printf(row, "---------", "---", "--------")
-	for _, f := range a {
-		if f.DateForecast != date {
-			date = f.DateForecast
-			fmt.Println(formatAQIDate(date))
+	prevDate := ""
+	for _, f := range rows {
+		date := formatAQIDate(f.DateForecast)
+		day := date
+		if date == prevDate {
+			day = ""
 		}
+		prevDate = date
 
 		aqi := "pending"
 		if f.AQI >= 0 {
@@ -45,8 +53,9 @@ func AirQuality(w weather.Forecast, a []air.Forecast) {
 		} else {
 			anyPending = true
 		}
-		fmt.Printf(row, f.ParameterName, aqi, AQICategory(f.Category.Name))
+		fmt.Fprintf(Table, "%s\t%s\t%s\t%s\n", day, f.ParameterName, aqi, AQICategory(f.Category.Name))
 	}
+	Table.Flush()
 
 	if anyPending {
 		fmt.Println("\nNote: 'pending' AQI values are published later in the day.")

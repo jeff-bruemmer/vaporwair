@@ -16,7 +16,7 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 	if len(w.Alerts) == 0 {
 		fmt.Println("No active weather alerts for this location.")
 		fmt.Println()
-		fmt.Println("Check back later or use -w for weekly forecast.")
+		fmt.Println("For the week ahead, run: vaporwair week")
 		return
 	}
 
@@ -40,17 +40,15 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 		if alert.Expires > 0 {
 			expiryTime := time.Unix(int64(alert.Expires), 0)
 			fmt.Fprintf(TW, "Expires:\t%s\n", expiryTime.Format("Mon Jan 2, 15:04 MST"))
+		}
 
-			// Show time remaining
-			timeRemaining := time.Until(expiryTime)
-			if timeRemaining > 0 {
-				hours := int(timeRemaining.Hours())
-				minutes := int(timeRemaining.Minutes()) % 60
-				if hours > 0 {
-					fmt.Fprintf(TW, "Time Remaining:\t%d hours, %d minutes\n", hours, minutes)
-				} else {
-					fmt.Fprintf(TW, "Time Remaining:\t%d minutes\n", minutes)
-				}
+		// Before onset, count down to the start; once in effect, to the end
+		now := clock()
+		if onset := unixOrZero(alert.Time); onset.After(now) {
+			fmt.Fprintf(TW, "Starts In:\t%s\n", hoursMinutes(onset.Sub(now)))
+		} else if alert.Expires > 0 {
+			if left := time.Unix(int64(alert.Expires), 0).Sub(now); left > 0 {
+				fmt.Fprintf(TW, "Time Remaining:\t%s\n", hoursMinutes(left))
 			}
 		}
 
@@ -62,7 +60,14 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 		printAlertSections(alert.Description, "Time Remaining:")
 		TW.Flush()
 	}
+}
 
-	fmt.Println()
-	fmt.Println("Stay safe and follow local emergency guidance.")
+// hoursMinutes renders a duration as "9 hours, 48 minutes", or "48 minutes" under an hour.
+func hoursMinutes(d time.Duration) string {
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	if hours > 0 {
+		return fmt.Sprintf("%d hours, %d minutes", hours, minutes)
+	}
+	return fmt.Sprintf("%d minutes", minutes)
 }
