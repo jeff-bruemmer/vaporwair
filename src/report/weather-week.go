@@ -34,7 +34,7 @@ func WeatherWeek(w weather.Forecast, a []air.Forecast) {
 		}
 		// A night period has no daytime high; NOAA's value is just the warmest hour left.
 		high := "-"
-		if !IsNightPeriod(day.PeriodName) {
+		if !IsNightPeriod(day) {
 			high = fmt.Sprintf("%.0f", day.TemperatureMax)
 		}
 		fmt.Fprintf(Table, "%s\t%.0f\t%s\t%.0f\t%.0f %s\t",

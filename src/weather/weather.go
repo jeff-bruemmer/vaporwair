@@ -35,6 +35,8 @@ type DataPoint struct {
 	Pressure            float64 `json:"pressure"`    // Inches of mercury
 	Visibility          float64 `json:"visibility"`  // Miles
 	DetailedForecast    string  `json:"detailedForecast"`
+	// Night marks an overnight daily period (NOAA's isDaytime is false). It has no daytime high.
+	Night bool `json:"night,omitempty"`
 }
 
 type DataBlock struct {
@@ -499,6 +501,7 @@ func dailyDataPoint(p NOAAPeriod) DataPoint {
 	t, _ := time.Parse(time.RFC3339, p.StartTime)
 	dp.Time = float64(t.Unix())
 	dp.PeriodName = p.Name
+	dp.Night = !p.IsDaytime
 	dp.Summary = p.ShortForecast
 	dp.DetailedForecast = p.DetailedForecast
 	dp.Icon = mapNOAAIconToIcon(p.ShortForecast)

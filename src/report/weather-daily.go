@@ -56,7 +56,7 @@ func dailyFields(day weather.DataPoint) []LabeledText {
 
 	// Temperature information (0F and below are real readings, so no "> 0" guards).
 	// A night period has no daytime high; NOAA's value is just the warmest hour left.
-	if !IsNightPeriod(day.PeriodName) {
+	if !IsNightPeriod(day) {
 		add("High", "%.0f%s", day.TemperatureMax, temperatureUnit)
 	}
 	add("Low", "%.0f%s", day.TemperatureMin, temperatureUnit)

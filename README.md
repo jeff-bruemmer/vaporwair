@@ -260,7 +260,21 @@ Options:
   -refresh   Skip the 5-minute cache and fetch fresh forecasts
 ```
 
-Options can go before or after the report name. Run `vaporwair -help` (or `-h`) to see this list.
+Options can go before or after the report name. Run `vaporwair help` (or `-help`, `-h`) to see this list.
+
+### Deprecated report flags
+
+These flags select a report and print a warning on stderr naming the report to use instead:
+
+| Flag      | Report               |
+| --------- | -------------------- |
+| `-i`      | `vaporwair insights` |
+| `-s`      | `vaporwair summary`  |
+| `-w`      | `vaporwair week`     |
+| `-d`      | `vaporwair daily`    |
+| `-alerts` | `vaporwair alerts`   |
+| `-a`      | `vaporwair air`      |
+| `-c`      | `vaporwair clothing` |
 
 ### Zip Code Usage
 

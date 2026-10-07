@@ -221,3 +221,17 @@ func TestBringListReadsAsPhrase(t *testing.T) {
 		t.Errorf("sentenceList = %q, want %q", got, want)
 	}
 }
+
+// NOAA's isDaytime decides, so a night period with an unusual name still has no high.
+func TestNightFlagBeatsPeriodName(t *testing.T) {
+	withClock(t, at(19, 11))
+	w := eveningForecast()
+	w.Daily.Data[0].PeriodName = "Christmas Eve"
+	w.Daily.Data[0].Night = true
+	if week := capture(t, func() { WeatherWeek(w, nil) }); !strings.Contains(week, "Christmas Eve  37   -") {
+		t.Errorf("week shows a high for a night period:\n%s", week)
+	}
+	if out := capture(t, func() { InsightsReport(w, nil) }); !strings.Contains(out, "Low Christmas Eve:") {
+		t.Errorf("insights treats a night period as day:\n%s", out)
+	}
+}

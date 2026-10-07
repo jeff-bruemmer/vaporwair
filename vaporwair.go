@@ -51,6 +51,19 @@ const ipZip = "ip"
 // options are the flags shown in usage, in order.
 var options = []string{"zip", "current", "refresh"}
 
+// oldReportFlags maps the report flags from before subcommands to their reports. They
+// still work, with a warning, so existing scripts keep running; usage doesn't list them.
+// -h is not here: it was hourly, and is now help.
+var oldReportFlags = map[string]string{
+	"i":      "insights",
+	"s":      "summary",
+	"w":      "week",
+	"d":      "daily",
+	"alerts": "alerts",
+	"a":      "air",
+	"c":      "clothing",
+}
+
 // notes collects non-fatal warnings raised while fetching.
 // They're printed after the report so they don't garble the spinner line.
 // Only the main goroutine appends to it.
@@ -214,6 +227,9 @@ func newFlagSet() *flag.FlagSet {
 	fs.StringVar(&zipCode, "zip", "", "Weather for a US zip code, saved as the default (-zip=ip clears it)")
 	fs.BoolVar(&useCurrentLocation, "current", false, "Use IP-based location this once (default unchanged)")
 	fs.BoolVar(&refresh, "refresh", false, "Skip the 5-minute cache and fetch fresh forecasts")
+	for name, report := range oldReportFlags {
+		fs.Bool(name, false, "Deprecated: use 'vaporwair "+report+"'")
+	}
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	return fs
@@ -402,14 +418,19 @@ func saveDefaultZip(appConfig storage.AppConfig) {
 }
 
 // selectReport parses args and returns the chosen report. The report name may come
-// before or after the options; with none, it is the default.
+// before or after the options; with none, it is the default. "help" returns flag.ErrHelp,
+// like -help.
 func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 	if err := fs.Parse(args); err != nil {
 		return reportSpec{}, err
 	}
 	spec := reports[0]
+	name := ""
 	if fs.NArg() > 0 {
-		name := fs.Arg(0)
+		name = fs.Arg(0)
+		if name == "help" {
+			return reportSpec{}, flag.ErrHelp
+		}
 		found := false
 		for _, r := range reports {
 			if r.name == name {
@@ -426,10 +447,49 @@ func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 			return reportSpec{}, fmt.Errorf("choose one report; unexpected argument %q", fs.Arg(0))
 		}
 	}
+	if old := usedOldFlags(fs); len(old) > 0 {
+		if name != "" {
+			old = append([]string{name}, old...)
+		}
+		if len(old) > 1 {
+			return reportSpec{}, fmt.Errorf("choose one report; got %s", strings.Join(old, " and "))
+		}
+		spec = findReport(oldReportFlags[strings.TrimPrefix(old[0], "-")])
+	}
 	if strings.EqualFold(zipCode, ipZip) {
 		zipCode, useCurrentLocation, forgetZip = "", true, true
 	}
 	return spec, nil
+}
+
+// usedOldFlags returns the old report flags set on fs, e.g. ["-w"].
+func usedOldFlags(fs *flag.FlagSet) []string {
+	var used []string
+	fs.Visit(func(f *flag.Flag) {
+		if _, ok := oldReportFlags[f.Name]; ok && f.Value.String() == "true" {
+			used = append(used, "-"+f.Name)
+		}
+	})
+	return used
+}
+
+// oldFlagWarnings tells users of the old report flags what replaces them.
+func oldFlagWarnings(fs *flag.FlagSet) []string {
+	var warnings []string
+	for _, flag := range usedOldFlags(fs) {
+		warnings = append(warnings, fmt.Sprintf("%s is deprecated and will be removed; use 'vaporwair %s'", flag, oldReportFlags[flag[1:]]))
+	}
+	return warnings
+}
+
+// findReport returns the report with the given name, which must exist.
+func findReport(name string) reportSpec {
+	for _, r := range reports {
+		if r.name == name {
+			return r
+		}
+	}
+	panic("no report named " + name)
 }
 
 // reportNames lists the report names for error messages.
@@ -452,10 +512,13 @@ func main() {
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vaporwair: %v\nRun 'vaporwair -help' for usage.\n", err)
+		fmt.Fprintf(os.Stderr, "vaporwair: %v\nRun 'vaporwair help' for usage.\n", err)
 		os.Exit(2)
 	}
 	selected = spec
+	for _, w := range oldFlagWarnings(fs) {
+		fmt.Fprintln(os.Stderr, "vaporwair: "+w)
+	}
 
 	// Setup configuration first (may prompt for user input)
 	appConfig, err := setupConfiguration()

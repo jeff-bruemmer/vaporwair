@@ -132,8 +132,13 @@ func TestSelectReport(t *testing.T) {
 		{[]string{"-h"}, "", "", flag.ErrHelp},
 		{[]string{"-help"}, "", "", flag.ErrHelp},
 		{[]string{"hourly", "-h"}, "", "", flag.ErrHelp},
-		{[]string{"-w"}, "", "", errAny}, // the old single-letter report flags are gone
-		{[]string{"-alerts"}, "", "", errAny},
+		{[]string{"help"}, "", "", flag.ErrHelp},
+		{[]string{"-zip=05401", "help"}, "", "", flag.ErrHelp},
+		{[]string{"-w"}, "week", "", nil}, // old report flags still work, with a warning
+		{[]string{"-alerts"}, "alerts", "", nil},
+		{[]string{"-c", "-zip=05401"}, "clothing", "05401", nil},
+		{[]string{"-w", "-d"}, "", "", errAny},
+		{[]string{"hourly", "-w"}, "", "", errAny},
 		{[]string{"hourly", "week"}, "", "", errAny},
 		{[]string{"bogus"}, "", "", errAny},
 	}
@@ -165,5 +170,40 @@ func TestZipIPClearsDefault(t *testing.T) {
 	}
 	if zipCode != "" || !useCurrentLocation || !forgetZip {
 		t.Errorf("-zip=ip: zip %q current %v forget %v, want \"\" true true", zipCode, useCurrentLocation, forgetZip)
+	}
+}
+
+// Each old report flag selects its report and names the replacement in its warning.
+func TestOldReportFlags(t *testing.T) {
+	for name, want := range oldReportFlags {
+		setFlags(t, "", false, false)
+		fs := newFlagSet()
+		got, err := selectReport(fs, []string{"-" + name})
+		if err != nil || got.name != want {
+			t.Errorf("-%s: got %q, %v; want %q", name, got.name, err, want)
+			continue
+		}
+		warnings := oldFlagWarnings(fs)
+		if len(warnings) != 1 || !strings.Contains(warnings[0], "'vaporwair "+want+"'") {
+			t.Errorf("-%s: warnings = %q", name, warnings)
+		}
+	}
+}
+
+// The old flags work but aren't advertised.
+func TestUsageHidesOldFlags(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stderr
+	os.Stderr = w
+	printUsage(newFlagSet())
+	os.Stderr = old
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	if out := buf.String(); strings.Contains(out, "Deprecated") || strings.Contains(out, "  -w") {
+		t.Errorf("usage lists the old flags:\n%s", out)
 	}
 }

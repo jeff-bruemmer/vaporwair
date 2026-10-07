@@ -309,10 +309,12 @@ func FeelsLikeRange(w weather.Forecast, hours []weather.DataPoint) (coldest, war
 	return coldest, warmest, coldestAt
 }
 
-// IsNightPeriod reports whether a NOAA period name is an overnight period ("Tonight",
-// "Overnight"). After about 6pm NOAA's first period is one, and it has no daytime high.
-func IsNightPeriod(name string) bool {
-	return name == "Tonight" || name == "Overnight" || strings.HasSuffix(name, " Night")
+// IsNightPeriod reports whether a daily period is overnight. After about 6pm NOAA's first
+// period is one, and it has no daytime high. Forecasts cached before Night was recorded
+// fall back to the period name ("Tonight", "Overnight", "Monday Night").
+func IsNightPeriod(day weather.DataPoint) bool {
+	name := day.PeriodName
+	return day.Night || name == "Tonight" || name == "Overnight" || strings.HasSuffix(name, " Night")
 }
 
 // FormatAlertWindow describes when an alert applies relative to now:

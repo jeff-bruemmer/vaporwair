@@ -121,7 +121,7 @@ func LimitData(d []weather.DataPoint, l int) []weather.DataPoint {
 // temperature), so it prints tonight's low and tomorrow's high instead.
 func printHighLow(tw *tabwriter.Writer, f weather.Forecast) {
 	first := f.Daily.Data[0]
-	if !IsNightPeriod(first.PeriodName) {
+	if !IsNightPeriod(first) {
 		fmt.Fprintf(tw, "High / Low:\t%.0f%s / %.0f%s\n", Round(first.TemperatureMax), temperatureUnit, Round(first.TemperatureMin), temperatureUnit)
 		return
 	}
