@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -50,19 +51,6 @@ const ipZip = "ip"
 
 // options are the flags shown in usage, in order.
 var options = []string{"zip", "current", "refresh"}
-
-// oldReportFlags maps the report flags from before subcommands to their reports. They
-// still work, with a warning, so existing scripts keep running; usage doesn't list them.
-// -h is not here: it was hourly, and is now help.
-var oldReportFlags = map[string]string{
-	"i":      "insights",
-	"s":      "summary",
-	"w":      "week",
-	"d":      "daily",
-	"alerts": "alerts",
-	"a":      "air",
-	"c":      "clothing",
-}
 
 // notes collects non-fatal warnings raised while fetching.
 // They're printed after the report so they don't garble the spinner line.
@@ -112,11 +100,6 @@ func startSpinner(label string) {
 		<-finished
 		stopSpinner = func() {}
 	}
-}
-
-// RunReports prints the selected report.
-func RunReports(f weather.Forecast, a []air.Forecast) {
-	selected.run(f, a)
 }
 
 // locatedByIP is true when this run's location came from IP lookup rather than a zip code.
@@ -227,9 +210,6 @@ func newFlagSet() *flag.FlagSet {
 	fs.StringVar(&zipCode, "zip", "", "Weather for a US zip code, saved as the default (-zip=ip clears it)")
 	fs.BoolVar(&useCurrentLocation, "current", false, "Use IP-based location this once (default unchanged)")
 	fs.BoolVar(&refresh, "refresh", false, "Skip the 5-minute cache and fetch fresh forecasts")
-	for name, report := range oldReportFlags {
-		fs.Bool(name, false, "Deprecated: use 'vaporwair "+report+"'")
-	}
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	return fs
@@ -390,7 +370,7 @@ func loadCachedForecasts(appConfig storage.AppConfig, stale bool) (storage.APICa
 // A zero cachedAt means the forecast was just fetched; stale marks an expired cache.
 func render(t time.Time, c geolocation.Coordinates, cachedAt time.Time, stale bool, wf weather.Forecast, af []air.Forecast) {
 	PrintHeader(t, c, cachedAt, stale, locatedByIP)
-	RunReports(wf, af)
+	selected.run(wf, af)
 	report.TW.Flush()
 	PrintNotes()
 }
@@ -425,21 +405,16 @@ func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 		return reportSpec{}, err
 	}
 	spec := reports[0]
-	name := ""
 	if fs.NArg() > 0 {
-		name = fs.Arg(0)
+		name := fs.Arg(0)
 		if name == "help" {
 			return reportSpec{}, flag.ErrHelp
 		}
-		found := false
-		for _, r := range reports {
-			if r.name == name {
-				spec, found = r, true
-			}
-		}
-		if !found {
+		i := slices.IndexFunc(reports, func(r reportSpec) bool { return r.name == name })
+		if i < 0 {
 			return reportSpec{}, fmt.Errorf("unknown report %q (reports: %s)", name, reportNames())
 		}
+		spec = reports[i]
 		if err := fs.Parse(fs.Args()[1:]); err != nil {
 			return reportSpec{}, err
 		}
@@ -447,49 +422,10 @@ func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 			return reportSpec{}, fmt.Errorf("choose one report; unexpected argument %q", fs.Arg(0))
 		}
 	}
-	if old := usedOldFlags(fs); len(old) > 0 {
-		if name != "" {
-			old = append([]string{name}, old...)
-		}
-		if len(old) > 1 {
-			return reportSpec{}, fmt.Errorf("choose one report; got %s", strings.Join(old, " and "))
-		}
-		spec = findReport(oldReportFlags[strings.TrimPrefix(old[0], "-")])
-	}
 	if strings.EqualFold(zipCode, ipZip) {
 		zipCode, useCurrentLocation, forgetZip = "", true, true
 	}
 	return spec, nil
-}
-
-// usedOldFlags returns the old report flags set on fs, e.g. ["-w"].
-func usedOldFlags(fs *flag.FlagSet) []string {
-	var used []string
-	fs.Visit(func(f *flag.Flag) {
-		if _, ok := oldReportFlags[f.Name]; ok && f.Value.String() == "true" {
-			used = append(used, "-"+f.Name)
-		}
-	})
-	return used
-}
-
-// oldFlagWarnings tells users of the old report flags what replaces them.
-func oldFlagWarnings(fs *flag.FlagSet) []string {
-	var warnings []string
-	for _, flag := range usedOldFlags(fs) {
-		warnings = append(warnings, fmt.Sprintf("%s is deprecated and will be removed; use 'vaporwair %s'", flag, oldReportFlags[flag[1:]]))
-	}
-	return warnings
-}
-
-// findReport returns the report with the given name, which must exist.
-func findReport(name string) reportSpec {
-	for _, r := range reports {
-		if r.name == name {
-			return r
-		}
-	}
-	panic("no report named " + name)
 }
 
 // reportNames lists the report names for error messages.
@@ -516,9 +452,6 @@ func main() {
 		os.Exit(2)
 	}
 	selected = spec
-	for _, w := range oldFlagWarnings(fs) {
-		fmt.Fprintln(os.Stderr, "vaporwair: "+w)
-	}
 
 	// Setup configuration first (may prompt for user input)
 	appConfig, err := setupConfiguration()

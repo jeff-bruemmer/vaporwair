@@ -14,11 +14,7 @@ func conditionsSection(tw *tabwriter.Writer, w weather.Forecast, a []air.Forecas
 	daily := w.Daily.Data[0]
 
 	// Name the section after NOAA's period ("This Afternoon", "Tonight") so it's right at any hour.
-	period := daily.PeriodName
-	if period == "" {
-		period = "Today"
-	}
-	fmt.Fprintln(tw, Title(period))
+	fmt.Fprintln(tw, Title(periodLabel(w)))
 	summary := daily.DetailedForecast
 	if summary == "" {
 		summary = daily.Summary

@@ -147,62 +147,6 @@ func TestGetPrecipTypeOrDefault(t *testing.T) {
 	}
 }
 
-// TestSafeSliceHourly tests safe array slicing with bounds checking
-func TestSafeSliceHourly(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     []weather.DataPoint
-		maxHours int
-		wantLen  int
-	}{
-		{
-			name:     "requested 12, have 20",
-			data:     make([]weather.DataPoint, 20),
-			maxHours: 12,
-			wantLen:  12,
-		},
-		{
-			name:     "requested 12, have 8",
-			data:     make([]weather.DataPoint, 8),
-			maxHours: 12,
-			wantLen:  8,
-		},
-		{
-			name:     "requested 12, have 0",
-			data:     []weather.DataPoint{},
-			maxHours: 12,
-			wantLen:  0,
-		},
-		{
-			name:     "empty slice",
-			data:     nil,
-			maxHours: 12,
-			wantLen:  0,
-		},
-		{
-			name:     "requested 0",
-			data:     make([]weather.DataPoint, 10),
-			maxHours: 0,
-			wantLen:  0,
-		},
-		{
-			name:     "requested negative",
-			data:     make([]weather.DataPoint, 10),
-			maxHours: -5,
-			wantLen:  0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SafeSliceHourly(tt.data, tt.maxHours)
-			if len(got) != tt.wantLen {
-				t.Errorf("SafeSliceHourly() len = %d, want %d", len(got), tt.wantLen)
-			}
-		})
-	}
-}
-
 // TestIsPrecipitationNote tests precipitation keyword detection
 func TestIsPrecipitationNote(t *testing.T) {
 	tests := []struct {

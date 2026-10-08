@@ -20,7 +20,7 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	fmt.Fprintf(TW, formatString, "Now", strings.Join(now, ", "))
 	printHighLow(TW, w)
 
-	rec := GetClothingRecommendationWithAir(w, a)
+	rec := GetClothingRecommendation(w, a)
 	fmt.Fprintf(TW, formatString, "Outfit", rec.Outfit)
 	if len(rec.Notes) > 0 {
 		fmt.Fprintf(TW, formatString, "Tip", rec.Notes[0])
@@ -33,11 +33,7 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	fmt.Fprintf(TW, formatString, "Air Quality", aqi)
 
 	if len(w.Alerts) > 0 {
-		alert := w.Alerts[0]
-		headline := AlertHeadline(alert.Title)
-		if window := FormatAlertWindow(unixOrZero(alert.Time), unixOrZero(alert.Expires), clock()); window != "" {
-			headline += " | " + window
-		}
+		headline := alertHeadlineWithWindow(w.Alerts[0], clock())
 		if more := len(w.Alerts) - 1; more > 0 {
 			headline += fmt.Sprintf(" (+%d more)", more)
 		}

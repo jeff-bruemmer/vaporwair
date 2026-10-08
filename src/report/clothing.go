@@ -57,19 +57,10 @@ func getBaseOutfit(temp float64) string {
 	return OutfitDescExtremeCold
 }
 
-// GetClothingRecommendation analyzes weather and returns clothing suggestions.
-func GetClothingRecommendation(f weather.Forecast) ClothingRecommendation {
-	return clothingRecommendation(f, nil)
-}
-
-// GetClothingRecommendationWithAir includes air quality in recommendations.
-func GetClothingRecommendationWithAir(f weather.Forecast, a []air.Forecast) ClothingRecommendation {
-	return clothingRecommendation(f, a)
-}
-
-// clothingRecommendation builds the recommendation. Temperature, precipitation, and wind
-// all come from the same window of hours (now until Until), so the advice is consistent.
-func clothingRecommendation(f weather.Forecast, a []air.Forecast) ClothingRecommendation {
+// GetClothingRecommendation analyzes weather and air quality (a may be nil) and returns
+// clothing suggestions. Temperature, precipitation, and wind all come from the same
+// window of hours (now until Until), so the advice is consistent.
+func GetClothingRecommendation(f weather.Forecast, a []air.Forecast) ClothingRecommendation {
 	var rec ClothingRecommendation
 	var notes []note
 	addNote := func(priority int, format string, args ...any) {
@@ -196,7 +187,7 @@ func windowWind(f weather.Forecast, hours []weather.DataPoint) float64 {
 
 // ClothingSummary prints a condensed clothing recommendation for the default report.
 func ClothingSummary(w weather.Forecast, a []air.Forecast) {
-	rec := GetClothingRecommendationWithAir(w, a)
+	rec := GetClothingRecommendation(w, a)
 
 	fmt.Println(Title("What to Wair"))
 
@@ -254,8 +245,7 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("What to Wair " + periodLabel(w)))
 	fmt.Println()
 
-	rec := GetClothingRecommendationWithAir(w, a)
-	daily := w.Daily.Data[0]
+	rec := GetClothingRecommendation(w, a)
 
 	// Find the most current hourly data point (closest to now)
 	current := GetCurrentHourlyData(w)
@@ -323,54 +313,34 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 		}
 	}
 
-	// Precipitation forecast
+	// Precipitation over the same hours as the outfit, so it explains any rain gear above
 	fmt.Println()
 	fmt.Println(Title("Precipitation"))
-
-	// Check daily precipitation
-	if daily.PrecipProbability > 0 {
-		precipType := "precipitation"
-		if daily.PrecipType != "" {
-			precipType = daily.PrecipType
-		}
-		fmt.Fprintf(TW, "%s:\t%.0f%% chance of %s\n", periodLabel(w), ToPercent(daily.PrecipProbability), precipType)
-
-		// Find hours with highest precipitation probability
-		type PrecipHour struct {
-			time       string
-			prob       float64
-			precipType string
-		}
-		var highPrecipHours []PrecipHour
-
-		// Safely slice hourly data to check next 12 hours
-		hoursToCheck := SafeSliceHourly(upcomingHours(w.Hourly.Data), DefaultHourlyLimit)
-		for _, hour := range hoursToCheck {
-			if hour.PrecipProbability >= PrecipSignificantThreshold {
-				timeStr := hour.PeriodName
-				if timeStr == "" {
-					timeStr = FormatTime(hour.Time)
-				}
-				pType := "precip"
-				if hour.PrecipType != "" {
-					pType = hour.PrecipType
-				}
-				highPrecipHours = append(highPrecipHours, PrecipHour{
-					time:       timeStr,
-					prob:       hour.PrecipProbability,
-					precipType: pType,
-				})
+	hours := windowHours(w, rec.Until)
+	until := rec.Until.Format("15:04")
+	if prob, kind := windowPrecip(w, hours); prob > 0 {
+		fmt.Fprintf(TW, "Until %s:\t%.0f%% chance of %s\n", until, prob, kind)
+		peak := false
+		for _, hour := range hours {
+			if hour.PrecipProbability < PrecipSignificantThreshold {
+				continue
 			}
-		}
-
-		if len(highPrecipHours) > 0 {
-			fmt.Fprintf(TW, "Peak times:\n")
-			for _, ph := range highPrecipHours {
-				fmt.Fprintf(TW, "  %-8s  %.0f%% %s\n", ph.time, ToPercent(ph.prob), ph.precipType)
+			if !peak {
+				fmt.Fprintf(TW, "Peak times:\n")
+				peak = true
 			}
+			label := hour.PeriodName
+			if label == "" {
+				label = FormatTime(hour.Time)
+			}
+			kind := hour.PrecipType
+			if kind == "" {
+				kind = "precip"
+			}
+			fmt.Fprintf(TW, "  %-8s  %.0f%% %s\n", label, ToPercent(hour.PrecipProbability), kind)
 		}
 	} else {
-		fmt.Fprintf(TW, "No precipitation expected %s\n", strings.ToLower(periodLabel(w)))
+		fmt.Fprintf(TW, "No precipitation expected until %s\n", until)
 	}
 
 	TW.Flush()

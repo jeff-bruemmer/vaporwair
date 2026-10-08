@@ -174,7 +174,7 @@ func TestAQICategoryMarksUnhealthy(t *testing.T) {
 // Clothing is chosen for the coldest it will feel, not the day's high.
 func TestClothingUsesColdestFeelsLike(t *testing.T) {
 	w, _ := fixtureForecast()
-	rec := GetClothingRecommendation(w)
+	rec := GetClothingRecommendation(w, nil)
 	if rec.Coldest >= 0 {
 		t.Errorf("expected coldest feels-like below zero, got %.0f", rec.Coldest)
 	}
@@ -284,9 +284,6 @@ func TestPointersAligned(t *testing.T) {
 			t.Errorf("insights missing aligned %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "-c flag") {
-		t.Errorf("insights points to the removed -c flag:\n%s", out)
-	}
 }
 
 // Next Few Hours uses the hourly report's columns, with Conditions last.
@@ -319,8 +316,8 @@ func TestAirPollutantsSorted(t *testing.T) {
 func TestInsightsAlertIsShort(t *testing.T) {
 	w, a := fixtureForecast()
 	out := capture(t, func() { InsightsReport(w, a) })
-	if !strings.Contains(out, "What:") || strings.Contains(out, "Where:") || !strings.Contains(out, "vaporwair alerts") {
-		t.Errorf("want What only and a pointer to the alerts report:\n%s", out)
+	if !strings.Contains(out, "What:") || strings.Contains(out, "Where:") {
+		t.Errorf("want What only:\n%s", out)
 	}
 	full := capture(t, func() { WeatherAlertsReport(w, a) })
 	if !strings.Contains(full, "Where:") {

@@ -65,7 +65,7 @@ func TestClothingWindowEnd(t *testing.T) {
 // At 19:11 the outfit is for the evening, not for 06:00 tomorrow.
 func TestEveningClothingIgnoresPreDawnLow(t *testing.T) {
 	withClock(t, at(19, 11))
-	rec := GetClothingRecommendation(eveningForecast())
+	rec := GetClothingRecommendation(eveningForecast(), nil)
 	if rec.Coldest != 42 {
 		t.Errorf("coldest feels-like before midnight = %.0f, want 42", rec.Coldest)
 	}
@@ -88,7 +88,7 @@ func TestLayeringTipNamesColdestHour(t *testing.T) {
 		w.Hourly.Data[i].Time = float64(base.Add(time.Duration(i) * time.Hour).Unix())
 	}
 	w.Daily.Data[0].PeriodName = "Today"
-	rec := GetClothingRecommendation(w)
+	rec := GetClothingRecommendation(w, nil)
 	want := "feels like 30F at 18:00"
 	if len(rec.Notes) == 0 || !strings.Contains(strings.Join(rec.Notes, "|"), want) {
 		t.Errorf("notes %q missing %q", rec.Notes, want)
@@ -105,7 +105,7 @@ func TestAirQualityNoteComesFirst(t *testing.T) {
 		w.Hourly.Data[i].WindGust = 30
 	}
 	a := []air.Forecast{{DateForecast: "2026-10-06", ParameterName: "PM2.5", AQI: 155, Category: air.Category{Name: "Unhealthy"}}}
-	rec := GetClothingRecommendationWithAir(w, a)
+	rec := GetClothingRecommendation(w, a)
 	if len(rec.Notes) < 3 || !strings.HasPrefix(rec.Notes[0], "Unhealthy air (PM2.5)") {
 		t.Errorf("first note should be the air quality warning, got %q", rec.Notes)
 	}
@@ -119,7 +119,7 @@ func TestAirQualityNoteComesFirst(t *testing.T) {
 // Feels-like already includes wind chill and heat index; tips must not count them again.
 func TestNoDoubleCountedFeelsLikeTips(t *testing.T) {
 	w, a := fixtureForecast()
-	rec := GetClothingRecommendationWithAir(w, a)
+	rec := GetClothingRecommendation(w, a)
 	for _, n := range rec.Notes {
 		lower := strings.ToLower(n)
 		if strings.Contains(lower, "wind chill") || strings.Contains(lower, "feels warmer") {
@@ -222,16 +222,40 @@ func TestBringListReadsAsPhrase(t *testing.T) {
 	}
 }
 
-// NOAA's isDaytime decides, so a night period with an unusual name still has no high.
-func TestNightFlagBeatsPeriodName(t *testing.T) {
-	withClock(t, at(19, 11))
-	w := eveningForecast()
-	w.Daily.Data[0].PeriodName = "Christmas Eve"
-	w.Daily.Data[0].Night = true
-	if week := capture(t, func() { WeatherWeek(w, nil) }); !strings.Contains(week, "Christmas Eve  37   -") {
-		t.Errorf("week shows a high for a night period:\n%s", week)
+// NOAA's isDaytime decides; period names are the fallback for older caches.
+func TestIsNightPeriod(t *testing.T) {
+	tests := []struct {
+		day  weather.DataPoint
+		want bool
+	}{
+		{weather.DataPoint{PeriodName: "Christmas Eve", Night: true}, true},
+		{weather.DataPoint{PeriodName: "Tonight"}, true},
+		{weather.DataPoint{PeriodName: "Overnight"}, true},
+		{weather.DataPoint{PeriodName: "Monday Night"}, true},
+		{weather.DataPoint{PeriodName: "This Afternoon"}, false},
 	}
-	if out := capture(t, func() { InsightsReport(w, nil) }); !strings.Contains(out, "Low Christmas Eve:") {
-		t.Errorf("insights treats a night period as day:\n%s", out)
+	for _, tt := range tests {
+		if got := IsNightPeriod(tt.day); got != tt.want {
+			t.Errorf("IsNightPeriod(%q, Night=%v) = %v, want %v", tt.day.PeriodName, tt.day.Night, got, tt.want)
+		}
+	}
+}
+
+// Rain later in the clothing window shows in the Precipitation section, not just in Bring.
+func TestClothingPrecipMatchesWindow(t *testing.T) {
+	withClock(t, at(14, 0))
+	w := eveningForecast()
+	base := at(14, 0)
+	for i := range w.Hourly.Data {
+		w.Hourly.Data[i].Time = float64(base.Add(time.Duration(i) * time.Hour).Unix())
+		if i >= 7 && i <= 9 {
+			w.Hourly.Data[i].PrecipProbability, w.Hourly.Data[i].PrecipType = 0.8, "rain"
+		}
+	}
+	w.Daily.Data[0].PeriodName = "This Afternoon"
+	w.Daily.Data[0].PrecipProbability = 0
+	out := capture(t, func() { ClothingReport(w, nil) })
+	if !strings.Contains(out, "Umbrella") || !strings.Contains(out, "80% chance of rain") || strings.Contains(out, "No precipitation expected") {
+		t.Errorf("umbrella advice without the rain that explains it:\n%s", out)
 	}
 }

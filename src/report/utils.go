@@ -67,17 +67,6 @@ func GetPrecipTypeOrDefault(precipType string) string {
 	return "Precipitation"
 }
 
-// SafeSliceHourly safely slices hourly data with bounds checking.
-func SafeSliceHourly(data []weather.DataPoint, maxHours int) []weather.DataPoint {
-	if maxHours <= 0 || len(data) == 0 {
-		return []weather.DataPoint{}
-	}
-	if maxHours > len(data) {
-		maxHours = len(data)
-	}
-	return data[:maxHours]
-}
-
 // IsPrecipitationNote checks if a note string contains precipitation-related keywords.
 // This is used to filter out precipitation-related notes when they're displayed elsewhere.
 func IsPrecipitationNote(note string) bool {
@@ -229,11 +218,7 @@ func ParseNWSDescription(desc string) []LabeledText {
 // FormatUntil formats a future time as clock time with a relative offset, e.g. "Wed 05:00 (in 15h)".
 // The weekday is omitted when t falls on the same day as now.
 func FormatUntil(t, now time.Time) string {
-	at := t.Format("15:04")
-	if t.YearDay() != now.YearDay() || t.Year() != now.Year() {
-		at = t.Format("Mon 15:04")
-	}
-
+	at := clockAt(t, now)
 	d := t.Sub(now)
 	if d <= 0 {
 		return at
@@ -241,10 +226,28 @@ func FormatUntil(t, now time.Time) string {
 	return fmt.Sprintf("%s (in %s)", at, FormatDuration(d))
 }
 
+// clockAt formats t as "15:04", or "Mon 15:04" when it falls on a different day than ref.
+func clockAt(t, ref time.Time) string {
+	if t.YearDay() != ref.YearDay() || t.Year() != ref.Year() {
+		return t.Format("Mon 15:04")
+	}
+	return t.Format("15:04")
+}
+
 // AlertHeadline marks an alert title in plain ASCII, e.g. "! WINTER STORM WARNING".
 // Output is black and white, so the marker and capitals carry the emphasis.
 func AlertHeadline(title string) string {
 	return "! " + strings.ToUpper(title)
+}
+
+// alertHeadlineWithWindow is an alert's headline followed by when it applies, e.g.
+// "! FROST ADVISORY | Wed 00:00-05:00 (starts in 4h)".
+func alertHeadlineWithWindow(a weather.Alert, now time.Time) string {
+	headline := AlertHeadline(a.Title)
+	if window := FormatAlertWindow(unixOrZero(a.Time), unixOrZero(a.Expires), now); window != "" {
+		headline += " | " + window
+	}
+	return headline
 }
 
 // aqiConcern lists the EPA categories at which outdoor activity should be limited.
@@ -327,17 +330,9 @@ func FormatAlertWindow(onset, expires, now time.Time) string {
 		}
 		return "until " + FormatUntil(expires, now)
 	}
-	start := onset.Format("15:04")
-	if onset.YearDay() != now.YearDay() || onset.Year() != now.Year() {
-		start = onset.Format("Mon 15:04")
-	}
-	window := start
+	window := clockAt(onset, now)
 	if !expires.IsZero() {
-		end := expires.Format("15:04")
-		if expires.YearDay() != onset.YearDay() || expires.Year() != onset.Year() {
-			end = expires.Format("Mon 15:04")
-		}
-		window += "-" + end
+		window += "-" + clockAt(expires, onset)
 	}
 	return fmt.Sprintf("%s (starts in %s)", window, FormatDuration(onset.Sub(now)))
 }

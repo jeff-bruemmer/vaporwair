@@ -169,7 +169,7 @@ Active alerts: 1
 ! FROST ADVISORY
 Effective:       Wed Oct 7, 00:00 EDT
 Expires:         Wed Oct 7, 05:00 EDT
-Starts In:       4 hours, 4 minutes
+Starts In:       4 hours, 49 minutes
 What:            Temperatures as low as 33 will result in frost formation.
 Where:           The Champlain Valley, which includes Eastern Clinton and
                  Eastern Essex Counties in New York and Western Addison, Grand
@@ -223,7 +223,7 @@ Until 00:00:  up to 51F, feels as cold as 42F at 23:00
   <15F        Extreme cold gear, heavy insulation, thermal base layers
 
 == PRECIPITATION ===============================================================
-Tonight:  1% chance of precipitation
+No precipitation expected until 00:00
 ```
 
 ## Setup
@@ -261,20 +261,6 @@ Options:
 ```
 
 Options can go before or after the report name. Run `vaporwair help` (or `-help`, `-h`) to see this list.
-
-### Deprecated report flags
-
-These flags select a report and print a warning on stderr naming the report to use instead:
-
-| Flag      | Report               |
-| --------- | -------------------- |
-| `-i`      | `vaporwair insights` |
-| `-s`      | `vaporwair summary`  |
-| `-w`      | `vaporwair week`     |
-| `-d`      | `vaporwair daily`    |
-| `-alerts` | `vaporwair alerts`   |
-| `-a`      | `vaporwair air`      |
-| `-c`      | `vaporwair clothing` |
 
 ### Zip Code Usage
 
@@ -321,25 +307,23 @@ Vaporwair obtains coordinates using a priority system:
 3. Saved default zip code: Uses the last zip code you specified
 4. IP geolocation: Falls back to IP-based location if no zip code is set
 
-It then calls the NOAA National Weather Service and AirNow APIs to get location-based weather and air quality forecasts, and prints the report you name.
+It then calls the NOAA National Weather Service and AirNow APIs to get location-based weather and air quality forecasts, and prints the report you name. The header says `(via IP)` when the location came from your IP address rather than a zip code, so a wrong guess is easy to spot.
 
 ### On Vaporwair speed
 
-1. The header says `(via IP)` when the location came from your IP address rather than a zip code, so a wrong guess is easy to spot.
+1. To prevent needless network calls, Vaporwair uses a 5-minute cache. If you made a call recently for the same location (including your saved default zip code), it serves cached data instead of hitting the APIs again. The header shows how old cached data is. Use `-refresh` to bypass it.
 
-2. To prevent needless network calls, Vaporwair uses a 5-minute cache. If you made a call recently for the same location (including your saved default zip code), it serves cached data instead of hitting the APIs again. The header shows how old cached data is. Use `-refresh` to bypass it.
-
-3. When cache is expired or missing, Vaporwair:
+2. When cache is expired or missing, Vaporwair:
    - Determines your coordinates (via zip code or IP geolocation)
    - Makes parallel async calls to NOAA and AirNow APIs
    - Both API calls execute concurrently with a 30-second timeout
    - Displays results once all data is retrieved
 
-4. Cached forecasts are location-aware - asking for a different zip code, or using `-current`, fetches fresh data.
+3. Cached forecasts are location-aware - asking for a different zip code, or using `-current`, fetches fresh data.
 
-5. If fetching fails (offline, or a service is down), Vaporwair shows the last saved forecast for the same location, up to a day old, and marks the header `(offline)`.
+4. If fetching fails (offline, or a service is down), Vaporwair shows the last saved forecast for the same location, up to a day old, and marks the header `(offline)`.
 
-6. While fetching, a small spinner shows on stderr. It only appears when stderr is a terminal, so piped or redirected output stays clean.
+5. While fetching, a small spinner shows on stderr. It only appears when stderr is a terminal, so piped or redirected output stays clean.
 
 ## Design constraints
 

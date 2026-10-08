@@ -213,14 +213,9 @@ func WeatherAlerts(f weather.Forecast) {
 			fmt.Fprintln(TW)
 		}
 
-		headline := AlertHeadline(alert.Title)
-		if window := FormatAlertWindow(unixOrZero(alert.Time), unixOrZero(alert.Expires), now); window != "" {
-			headline += " | " + window
-		}
-
-		fmt.Fprintf(TW, "Alert:\t%s\n", headline)
+		fmt.Fprintf(TW, "Alert:\t%s\n", alertHeadlineWithWindow(alert, now))
 		if what := alertWhat(alert.Description); what != "" {
-			fmt.Fprintf(TW, "What:\t%s\n", strings.Join(WrapText(what, alertWrapWidth("Alert:")), "\n\t"))
+			fmt.Fprintf(TW, "What:\t%s\n", strings.Join(WrapText(what, alertWrapWidth(len("Details:"))), "\n\t"))
 		}
 	}
 	fmt.Fprintf(TW, "Details:\tvaporwair alerts\n")
@@ -242,9 +237,9 @@ func alertWhat(desc string) string {
 	return Truncate(text, 160)
 }
 
-// alertWrapWidth is the room left for alert text after a label column as wide as widest.
-func alertWrapWidth(widest string) int {
-	return max(ReportWidth-max(len(widest)+padding, minwidth), 30)
+// alertWrapWidth is the room left for alert text after a label column labelWidth wide.
+func alertWrapWidth(labelWidth int) int {
+	return max(ReportWidth-max(labelWidth+padding, minwidth), 30)
 }
 
 // printAlertSections writes an NWS alert description to TW as labeled sections
@@ -261,7 +256,7 @@ func printAlertSections(desc, widestOther string) {
 	for _, sec := range sections {
 		labelWidth = max(labelWidth, utf8.RuneCountInString(sec.Label)+1)
 	}
-	wrapWidth := alertWrapWidth(strings.Repeat(" ", labelWidth))
+	wrapWidth := alertWrapWidth(labelWidth)
 
 	for _, sec := range sections {
 		fmt.Fprintf(TW, "%s:\t%s\n", sec.Label, strings.Join(WrapText(sec.Text, wrapWidth), "\n\t"))

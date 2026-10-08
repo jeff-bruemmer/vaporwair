@@ -95,22 +95,23 @@ func TestPrintHeaderMarksOfflineCache(t *testing.T) {
 		{now.Add(-2 * time.Hour), true, false, "| cached 2h ago (offline)\n"},
 	}
 	for _, tt := range tests {
-		out := captureStdout(t, func() { PrintHeader(now, c, tt.cachedAt, tt.stale, tt.byIP) })
+		out := captureOutput(t, &os.Stdout, func() { PrintHeader(now, c, tt.cachedAt, tt.stale, tt.byIP) })
 		if !strings.Contains(out, tt.want) {
 			t.Errorf("PrintHeader = %q, want it to contain %q", out, tt.want)
 		}
 	}
 }
 
-func captureStdout(t *testing.T, run func()) string {
+// captureOutput returns what run writes to *f (os.Stdout or os.Stderr).
+func captureOutput(t *testing.T, f **os.File, run func()) string {
 	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := os.Stdout
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
+	old := *f
+	*f = w
+	defer func() { *f = old }()
 	run()
 	w.Close()
 	var buf bytes.Buffer
@@ -134,11 +135,7 @@ func TestSelectReport(t *testing.T) {
 		{[]string{"hourly", "-h"}, "", "", flag.ErrHelp},
 		{[]string{"help"}, "", "", flag.ErrHelp},
 		{[]string{"-zip=05401", "help"}, "", "", flag.ErrHelp},
-		{[]string{"-w"}, "week", "", nil}, // old report flags still work, with a warning
-		{[]string{"-alerts"}, "alerts", "", nil},
-		{[]string{"-c", "-zip=05401"}, "clothing", "05401", nil},
-		{[]string{"-w", "-d"}, "", "", errAny},
-		{[]string{"hourly", "-w"}, "", "", errAny},
+		{[]string{"-w"}, "", "", errAny}, // report flags are gone; reports are named
 		{[]string{"hourly", "week"}, "", "", errAny},
 		{[]string{"bogus"}, "", "", errAny},
 	}
@@ -173,37 +170,19 @@ func TestZipIPClearsDefault(t *testing.T) {
 	}
 }
 
-// Each old report flag selects its report and names the replacement in its warning.
-func TestOldReportFlags(t *testing.T) {
-	for name, want := range oldReportFlags {
-		setFlags(t, "", false, false)
-		fs := newFlagSet()
-		got, err := selectReport(fs, []string{"-" + name})
-		if err != nil || got.name != want {
-			t.Errorf("-%s: got %q, %v; want %q", name, got.name, err, want)
-			continue
-		}
-		warnings := oldFlagWarnings(fs)
-		if len(warnings) != 1 || !strings.Contains(warnings[0], "'vaporwair "+want+"'") {
-			t.Errorf("-%s: warnings = %q", name, warnings)
-		}
+// Usage lists every report and option; options must name flags newFlagSet defines.
+func TestUsage(t *testing.T) {
+	out := captureOutput(t, &os.Stderr, func() { printUsage(newFlagSet()) })
+	var wants []string
+	for _, r := range reports {
+		wants = append(wants, "  "+r.name+" ")
 	}
-}
-
-// The old flags work but aren't advertised.
-func TestUsageHidesOldFlags(t *testing.T) {
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+	for _, name := range options {
+		wants = append(wants, "  -"+name)
 	}
-	old := os.Stderr
-	os.Stderr = w
-	printUsage(newFlagSet())
-	os.Stderr = old
-	w.Close()
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	if out := buf.String(); strings.Contains(out, "Deprecated") || strings.Contains(out, "  -w") {
-		t.Errorf("usage lists the old flags:\n%s", out)
+	for _, want := range wants {
+		if !strings.Contains(out, want) {
+			t.Errorf("usage missing %q:\n%s", want, out)
+		}
 	}
 }
