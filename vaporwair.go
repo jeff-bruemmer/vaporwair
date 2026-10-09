@@ -692,6 +692,7 @@ func main() {
 			notes = append(notes, fmt.Sprintf("Showing the last saved forecast: %v", err))
 			locatedByIP = pc.ByIP
 			render(t, pc.Coordinates, pc.Time, true, wf, af)
+			saveDefaultZip(appConfig.ConfigFile(), savedDefault)
 			return
 		}
 		fatal(err)

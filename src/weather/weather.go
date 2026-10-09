@@ -70,8 +70,12 @@ type Forecast struct {
 // NOAA API constants
 const NOAABaseURL = "https://api.weather.gov"
 
-// noaaTimeout bounds each NOAA request.
+// noaaTimeout bounds each NOAA request the forecast needs.
 const noaaTimeout = 10 * time.Second
+
+// noaaOptionalTimeout bounds the alerts and observation requests, which a forecast can do
+// without. The observation takes two in a row, so it still finishes within noaaTimeout.
+const noaaOptionalTimeout = 5 * time.Second
 
 // NOAA Alerts API structures
 type NOAAAlertResponse struct {
@@ -485,10 +489,15 @@ func convertNOAADailyPeriodsToDataBlock(periods []NOAAPeriod) DataBlock {
 		dailyData = append(dailyData, tonight)
 		start = 1
 	}
+	// A day whose night is past the end of the forecast has no low, and 0F is a real low,
+	// so that day is left out; reports would show it once Tonight is over. A lone day is
+	// kept, so Data[0] always exists.
 	for i := start; i < len(periods); i += 2 {
 		dp := dailyDataPoint(periods[i])
 		if i+1 < len(periods) {
 			dp.TemperatureMin = float64(periods[i+1].Temperature)
+		} else if len(dailyData) > 0 {
+			break
 		}
 		dailyData = append(dailyData, dp)
 	}
@@ -601,7 +610,7 @@ func mapNOAAIconToIcon(shortForecast string) string {
 func GetNOAAAlerts(c geolocation.Coordinates) ([]Alert, error) {
 	url := fmt.Sprintf("%s/alerts/active?point=%s,%s", NOAABaseURL, c.Latitude, c.Longitude)
 
-	resp, err := dialer.Get(url, noaaTimeout)
+	resp, err := dialer.Get(url, noaaOptionalTimeout)
 	if err != nil {
 		// Alerts are optional - don't fail if unavailable
 		return []Alert{}, nil
@@ -650,7 +659,7 @@ func GetNOAAObservation(stationsURL string) (NOAAObservationProperties, error) {
 	var obsProps NOAAObservationProperties
 
 	// First, get list of observation stations
-	resp, err := dialer.Get(stationsURL, noaaTimeout)
+	resp, err := dialer.Get(stationsURL, noaaOptionalTimeout)
 	if err != nil {
 		return obsProps, err
 	}
@@ -674,7 +683,7 @@ func GetNOAAObservation(stationsURL string) (NOAAObservationProperties, error) {
 	stationID := stations.Features[0].Properties.StationIdentifier
 	obsURL := fmt.Sprintf("%s/stations/%s/observations/latest", NOAABaseURL, stationID)
 
-	resp, err = dialer.Get(obsURL, noaaTimeout)
+	resp, err = dialer.Get(obsURL, noaaOptionalTimeout)
 	if err != nil {
 		return obsProps, err
 	}

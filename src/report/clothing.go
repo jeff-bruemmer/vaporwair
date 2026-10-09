@@ -49,7 +49,7 @@ type Note struct {
 
 // getBaseOutfit returns clothing recommendations based on temperature.
 func getBaseOutfit(temp float64) string {
-	tempInt := int(temp)
+	tempInt := int(Round(temp)) // the shown value, so the marked row matches it
 	for _, level := range OutfitLevels {
 		if tempInt >= level.MinTemp && tempInt <= level.MaxTemp {
 			return level.Outfit
@@ -259,7 +259,7 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println()
 
 	// Outfit tiers, with the recommended one marked
-	basis := int(rec.Coldest)
+	basis := int(Round(rec.Coldest))
 	printTableHeader([]column{{"  Feels like", ""}, {"Outfit", ""}})
 	for _, level := range OutfitLevels {
 		indicator := "  "

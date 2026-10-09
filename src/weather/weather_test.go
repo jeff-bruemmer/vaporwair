@@ -3,6 +3,7 @@ package weather
 import (
 	"encoding/json"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -111,6 +112,22 @@ func getSampleNOAADailyForecastNightFirst() NOAAForecastResponse {
 					WindDirection:              "W",
 					ShortForecast:              "Sunny",
 					DetailedForecast:           "Sunny skies throughout the day.",
+					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
+					Dewpoint:                   NOAAValue{Value: &dewpoint},
+					RelativeHumidity:           NOAAValue{Value: &humidity},
+				},
+				{
+					Number:                     3,
+					Name:                       "Tomorrow Night",
+					StartTime:                  "2025-10-25T18:00:00-04:00",
+					EndTime:                    "2025-10-26T06:00:00-04:00",
+					IsDaytime:                  false,
+					Temperature:                60,
+					TemperatureUnit:            "F",
+					WindSpeed:                  "5 mph",
+					WindDirection:              "W",
+					ShortForecast:              "Mostly Clear",
+					DetailedForecast:           "Mostly clear.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
@@ -262,6 +279,34 @@ func TestConvertNOAADailyPeriodsToDataBlock_NightFirst(t *testing.T) {
 	}
 	if tomorrow.TemperatureMax != 80 {
 		t.Errorf("Expected tomorrow's high 80, got %f", tomorrow.TemperatureMax)
+	}
+	if tomorrow.TemperatureMin != 60 {
+		t.Errorf("Expected tomorrow's low 60, got %f", tomorrow.TemperatureMin)
+	}
+}
+
+// NOAA sends 14 periods. Starting at night, the last is a day whose night isn't in the
+// forecast; it has no low, so it is left out rather than shown with a low of 0F.
+func TestDayWithoutNightLeftOut(t *testing.T) {
+	var periods []NOAAPeriod
+	for i := range 14 {
+		periods = append(periods, NOAAPeriod{
+			Name:        "Period " + strconv.Itoa(i),
+			StartTime:   "2025-10-24T18:00:00-04:00",
+			IsDaytime:   i%2 == 1,
+			Temperature: 40 + i,
+		})
+	}
+
+	block := convertNOAADailyPeriodsToDataBlock(periods)
+
+	if len(block.Data) != 7 {
+		t.Fatalf("Expected Tonight and 6 days, got %d entries", len(block.Data))
+	}
+	for _, d := range block.Data {
+		if d.TemperatureMin == 0 {
+			t.Errorf("%s has no low", d.PeriodName)
+		}
 	}
 }
 
