@@ -526,7 +526,7 @@ func saveDefaultZip(configFile, saved string) {
 // flag.ErrHelp, like -help.
 func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 	if err := fs.Parse(args); err != nil {
-		return reportSpec{}, err
+		return reportSpec{}, reportFlagHint(args, err)
 	}
 	spec := reports[0]
 	if fs.NArg() > 0 {
@@ -543,13 +543,42 @@ func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 		}
 		spec = reports[i]
 		if err := fs.Parse(fs.Args()[1:]); err != nil {
-			return reportSpec{}, err
+			return reportSpec{}, reportFlagHint(args, err)
 		}
 		if fs.NArg() > 0 {
 			return reportSpec{}, fmt.Errorf("choose one report; unexpected argument %q", fs.Arg(0))
 		}
 	}
 	return spec, checkLocationFlags(fs)
+}
+
+// reportFlags maps report-like flags (-s, -w, -alerts) to the report of that name. Reports
+// are chosen by name, so these are not options; -h is help.
+var reportFlags = map[string]string{
+	"d": "daily", "w": "week", "a": "air", "c": "clothing",
+	"i": "insights", "s": "summary", "alerts": "alerts",
+}
+
+// reportFlagHint turns a parse error caused by a report-like flag in args into one that
+// names the report to run instead. Any other error, and -help, is returned unchanged.
+func reportFlagHint(args []string, err error) error {
+	if errors.Is(err, flag.ErrHelp) {
+		return err
+	}
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		name, ok := strings.CutPrefix(arg, "-")
+		if !ok {
+			continue
+		}
+		name, _, _ = strings.Cut(strings.TrimPrefix(name, "-"), "=")
+		if r, ok := reportFlags[name]; ok {
+			return fmt.Errorf("-%s is not an option; reports are chosen by name: vaporwair %s", name, r)
+		}
+	}
+	return err
 }
 
 // checkLocationFlags validates -zip and -default before anything is fetched or saved.
