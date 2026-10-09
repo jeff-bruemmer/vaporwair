@@ -30,7 +30,7 @@ const (
 // Default array limits for data display
 const (
 	DefaultHourlyLimit = 12 // Default number of hours to display
-	DefaultMaxHours    = 6  // Default maximum hours for detailed view
+	DefaultMaxHours    = 6  // Rows in Insights' Next Few Hours
 )
 
 // Outfit descriptions for each temperature range

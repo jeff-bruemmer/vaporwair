@@ -16,7 +16,12 @@ const exKey = "Key"
 const exCity = "City"
 const exZip = "Zip"
 
-var exCoordinates = geolocation.Coordinates{exLatitude, exLongitude, exCity, exZip}
+var exCoordinates = geolocation.Coordinates{
+	Latitude:  exLatitude,
+	Longitude: exLongitude,
+	City:      exCity,
+	Zip:       exZip,
+}
 
 func TestBuildAirNowURL(t *testing.T) {
 	got := BuildAirNowURL(AirNowAddress, exZip, exKey)
@@ -225,8 +230,8 @@ func TestGetForecast_HTTPError(t *testing.T) {
 	defer server.Close()
 
 	forecasts, err := GetForecast(server.URL)
-	if err == nil || err.Error() != "HTTP 410" {
-		t.Errorf("Expected error \"HTTP 410\", got %v", err)
+	if err == nil || err.Error() != "AirNow returned HTTP 410" {
+		t.Errorf("Expected error \"AirNow returned HTTP 410\", got %v", err)
 	}
 	if len(forecasts) != 0 {
 		t.Errorf("Expected 0 forecasts on error, got %d", len(forecasts))

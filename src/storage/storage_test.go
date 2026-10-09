@@ -8,80 +8,81 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
 
-// Config File Creation and Reading
-// Validates that config files are created with correct structure and can be read back
-// This ensures no regression when migrating from ioutil to os
+// sandboxHome points HOME at a temp directory and unsets the XDG variables,
+// so nothing touches the real home directory. It returns the temp home.
+func sandboxHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("XDG_CACHE_HOME", "")
+	return home
+}
+
+// noTerminal replaces stdin with a pipe for the test, so Capture never prompts.
+func noTerminal(t *testing.T) {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	old := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; r.Close() })
+}
+
+// Config files are created with correct structure and can be read back.
 func TestCreateAndGetConfig(t *testing.T) {
-	// Setup: Create temp directory
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Test: Create config with API key
 	apiKey := "test-api-key-12345"
-	configPath := tempDir + ConfigFileName
+	configPath := filepath.Join(t.TempDir(), ConfigFileName)
 
-	// Create the vaporwair subdirectory
-	vaporwairDir := tempDir + VaporwairDir
-	err = os.MkdirAll(vaporwairDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create vaporwair dir: %v", err)
-	}
-
-	err = CreateConfig(tempDir, apiKey)
-	if err != nil {
+	if err := CreateConfig(configPath, apiKey); err != nil {
 		t.Fatalf("CreateConfig failed: %v", err)
 	}
 
-	// Verify: Config file exists
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Fatalf("Config file was not created at %s", configPath)
+	config, err := GetConfig(configPath)
+	if err != nil {
+		t.Fatalf("GetConfig failed: %v", err)
 	}
-
-	// Verify: GetConfig returns same data
-	config := GetConfig(configPath)
 	if config.AirNowAPIKey != apiKey {
 		t.Errorf("Config API key mismatch: got %q, want %q", config.AirNowAPIKey, apiKey)
 	}
 
-	// Verify: Config is valid JSON
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("Failed to read config file: %v", err)
 	}
-
 	var jsonCheck Config
 	if err := json.Unmarshal(data, &jsonCheck); err != nil {
 		t.Errorf("Config file is not valid JSON: %v", err)
 	}
 }
 
-// Weather Forecast Persistence
-// Validates forecast serialization to ensure migration doesn't break cache functionality
+// A broken config file is an error that says how to recover, not a crash.
+func TestGetConfigInvalidJSON(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), ConfigFileName)
+	if err := os.WriteFile(configPath, []byte(`{"airnowapikey": "abc`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := GetConfig(configPath)
+	if err == nil {
+		t.Fatal("GetConfig accepted invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "delete it to run setup again") {
+		t.Errorf("error = %q, want a recovery hint", err)
+	}
+}
+
+// Weather forecast serialization round-trips through the cache.
 func TestSaveAndLoadWeatherForecast(t *testing.T) {
-	// Setup: Create temp directory
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	forecastPath := filepath.Join(t.TempDir(), SavedWeatherFileName)
 
-	forecastPath := tempDir + SavedWeatherFileName
-
-	// Create directory structure
-	vaporwairDir := tempDir + VaporwairDir
-	err = os.MkdirAll(vaporwairDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create vaporwair dir: %v", err)
-	}
-
-	// Create sample forecast with comprehensive data
 	sampleForecast := weather.Forecast{
 		Latitude:  40.7128,
 		Longitude: -74.0060,
@@ -111,24 +112,15 @@ func TestSaveAndLoadWeatherForecast(t *testing.T) {
 		Alerts: []weather.Alert{},
 	}
 
-	// Test: SaveWeatherForecast
-	success := SaveWeatherForecast(forecastPath, sampleForecast)
-	if !success {
-		t.Fatal("SaveWeatherForecast returned false")
+	if err := SaveWeatherForecast(forecastPath, sampleForecast); err != nil {
+		t.Fatalf("SaveWeatherForecast failed: %v", err)
 	}
 
-	// Verify: File exists
-	if _, err := os.Stat(forecastPath); os.IsNotExist(err) {
-		t.Fatalf("Weather forecast file was not created at %s", forecastPath)
-	}
-
-	// Test: LoadSavedWeather
 	loaded, err := LoadSavedWeather(forecastPath)
 	if err != nil {
 		t.Fatalf("LoadSavedWeather failed: %v", err)
 	}
 
-	// Verify: Critical fields match
 	if loaded.Latitude != sampleForecast.Latitude {
 		t.Errorf("Latitude mismatch: got %f, want %f", loaded.Latitude, sampleForecast.Latitude)
 	}
@@ -152,26 +144,10 @@ func TestSaveAndLoadWeatherForecast(t *testing.T) {
 	}
 }
 
-// Air Forecast Persistence
-// Validates air quality cache functionality
+// Air quality forecasts round-trip through the cache.
 func TestSaveAndLoadAirForecast(t *testing.T) {
-	// Setup: Create temp directory
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	airPath := filepath.Join(t.TempDir(), SavedAirFileName)
 
-	airPath := tempDir + SavedAirFileName
-
-	// Create directory structure
-	vaporwairDir := tempDir + VaporwairDir
-	err = os.MkdirAll(vaporwairDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create vaporwair dir: %v", err)
-	}
-
-	// Create sample air quality forecast
 	sampleAir := []air.Forecast{
 		{
 			DateForecast:  "2025-11-01",
@@ -181,10 +157,7 @@ func TestSaveAndLoadAirForecast(t *testing.T) {
 			Longitude:     -74.0060,
 			ParameterName: "O3",
 			AQI:           55,
-			Category: air.Category{
-				Number: 2,
-				Name:   "Moderate",
-			},
+			Category:      air.Category{Number: 2, Name: "Moderate"},
 		},
 		{
 			DateForecast:  "2025-11-01",
@@ -192,35 +165,21 @@ func TestSaveAndLoadAirForecast(t *testing.T) {
 			StateCode:     "NY",
 			ParameterName: "PM2.5",
 			AQI:           35,
-			Category: air.Category{
-				Number: 1,
-				Name:   "Good",
-			},
+			Category:      air.Category{Number: 1, Name: "Good"},
 		},
 	}
 
-	// Test: SaveAirForecast
-	success := SaveAirForecast(airPath, sampleAir)
-	if !success {
-		t.Fatal("SaveAirForecast returned false")
+	if err := SaveAirForecast(airPath, sampleAir); err != nil {
+		t.Fatalf("SaveAirForecast failed: %v", err)
 	}
 
-	// Verify: File exists
-	if _, err := os.Stat(airPath); os.IsNotExist(err) {
-		t.Fatalf("Air forecast file was not created at %s", airPath)
-	}
-
-	// Test: LoadSavedAir
 	loaded, err := LoadSavedAir(airPath)
 	if err != nil {
 		t.Fatalf("LoadSavedAir failed: %v", err)
 	}
-
-	// Verify: Data matches
 	if len(loaded) != len(sampleAir) {
 		t.Fatalf("Air forecast count mismatch: got %d, want %d", len(loaded), len(sampleAir))
 	}
-
 	for i, forecast := range loaded {
 		if forecast.ParameterName != sampleAir[i].ParameterName {
 			t.Errorf("Parameter name mismatch at index %d: got %s, want %s",
@@ -233,26 +192,9 @@ func TestSaveAndLoadAirForecast(t *testing.T) {
 	}
 }
 
-// Call Info Persistence
-// Validates cache metadata storage - critical for cache timeout logic
+// Cache metadata round-trips, including whether the location came from IP lookup.
 func TestUpdateAndLoadCallInfo(t *testing.T) {
-	// Setup: Create temp directory
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	callPath := tempDir + SavedCallFileName
-
-	// Create directory structure
-	vaporwairDir := tempDir + VaporwairDir
-	err = os.MkdirAll(vaporwairDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create vaporwair dir: %v", err)
-	}
-
-	// Create sample coordinates
+	callPath := filepath.Join(t.TempDir(), SavedCallFileName)
 	coords := geolocation.Coordinates{
 		Latitude:  "40.7128",
 		Longitude: "-74.0060",
@@ -260,303 +202,258 @@ func TestUpdateAndLoadCallInfo(t *testing.T) {
 		Zip:       "10001",
 	}
 
-	// Test: UpdateLastCall
 	beforeTime := time.Now()
-	err = UpdateLastCall(coords, callPath)
-	afterTime := time.Now()
-	if err != nil {
+	if err := UpdateLastCall(coords, true, callPath); err != nil {
 		t.Fatalf("UpdateLastCall failed: %v", err)
 	}
+	afterTime := time.Now()
 
-	// Verify: File exists
-	if _, err := os.Stat(callPath); os.IsNotExist(err) {
-		t.Fatalf("Call info file was not created at %s", callPath)
-	}
-
-	// Test: LoadCallInfo
 	loaded, err := LoadCallInfo(callPath)
 	if err != nil {
 		t.Fatalf("LoadCallInfo failed: %v", err)
 	}
-
-	// Verify: Coordinates match
-	if loaded.Coordinates.Latitude != coords.Latitude {
-		t.Errorf("Latitude mismatch: got %s, want %s", loaded.Coordinates.Latitude, coords.Latitude)
+	if loaded.Coordinates != coords {
+		t.Errorf("Coordinates mismatch: got %+v, want %+v", loaded.Coordinates, coords)
 	}
-	if loaded.Coordinates.Longitude != coords.Longitude {
-		t.Errorf("Longitude mismatch: got %s, want %s", loaded.Coordinates.Longitude, coords.Longitude)
+	if !loaded.ByIP {
+		t.Error("ByIP was not saved")
 	}
-	if loaded.Coordinates.City != coords.City {
-		t.Errorf("City mismatch: got %s, want %s", loaded.Coordinates.City, coords.City)
-	}
-	if loaded.Coordinates.Zip != coords.Zip {
-		t.Errorf("Zip mismatch: got %s, want %s", loaded.Coordinates.Zip, coords.Zip)
-	}
-
-	// Verify: Time is within reasonable bounds (critical for cache timeout)
 	if loaded.Time.Before(beforeTime) || loaded.Time.After(afterTime) {
 		t.Errorf("Timestamp out of bounds: got %v, want between %v and %v",
 			loaded.Time, beforeTime, afterTime)
 	}
 }
 
-// File Permission Verification
-// This test will FAIL with current code (0644) and PASS after fix (0600 for config)
+// The config file holds the API key and must be owner-only; forecasts need not be.
 func TestFilePermissions(t *testing.T) {
-	// Skip on Windows (Unix permissions don't apply)
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping Unix permission test on Windows")
 	}
+	dir := t.TempDir()
 
-	// Setup: Create temp directory
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Create directory structure
-	vaporwairDir := tempDir + VaporwairDir
-	err = os.MkdirAll(vaporwairDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create vaporwair dir: %v", err)
-	}
-
-	// Create config file (contains API key - should be 0600)
-	apiKey := "secret-api-key"
-	configPath := tempDir + ConfigFileName
-	err = CreateConfig(tempDir, apiKey)
-	if err != nil {
+	configPath := filepath.Join(dir, ConfigFileName)
+	if err := CreateConfig(configPath, "secret-api-key"); err != nil {
 		t.Fatalf("CreateConfig failed: %v", err)
 	}
-
-	// Verify: Config has 0600 permissions (owner-only)
 	fileInfo, err := os.Stat(configPath)
 	if err != nil {
 		t.Fatalf("Failed to stat config file: %v", err)
 	}
-
-	perm := fileInfo.Mode().Perm()
-	expected := os.FileMode(0600)
-	if perm != expected {
-		t.Errorf("Config file has insecure permissions: got %#o, want %#o (owner-only)", perm, expected)
-		t.Errorf("Config contains API keys and should not be world-readable")
+	if perm := fileInfo.Mode().Perm(); perm != 0600 {
+		t.Errorf("Config file has insecure permissions: got %#o, want 0600 (owner-only)", perm)
 	}
 
-	// Create forecast files (public data - 0644 is acceptable)
-	forecastPath := tempDir + SavedWeatherFileName
-	sampleForecast := weather.Forecast{
-		Latitude:  40.7128,
-		Longitude: -74.0060,
+	forecastPath := filepath.Join(dir, SavedWeatherFileName)
+	if err := SaveWeatherForecast(forecastPath, weather.Forecast{Latitude: 40.7128}); err != nil {
+		t.Fatal(err)
 	}
-	SaveWeatherForecast(forecastPath, sampleForecast)
-
 	fileInfo, err = os.Stat(forecastPath)
 	if err != nil {
 		t.Fatalf("Failed to stat forecast file: %v", err)
 	}
-
-	perm = fileInfo.Mode().Perm()
-	// Forecast files can be 0644 (they don't contain secrets)
-	if perm != 0644 && perm != 0600 {
-		t.Errorf("Forecast file has unexpected permissions: got %#o", perm)
+	if perm := fileInfo.Mode().Perm(); perm != 0644 {
+		t.Errorf("Forecast file has unexpected permissions: got %#o, want 0644", perm)
 	}
 }
 
-// Error Handling - Unreadable Files
-// Validates proper error returns instead of log.Fatal
+// An unreadable cache is an error the caller can handle.
 func TestLoadSavedWeatherError(t *testing.T) {
-	t.Skip("Skipping error handling test - current code uses log.Fatal which exits the process")
-	// Note: This test is skipped because fixing log.Fatal is Issue #5
-	// Current implementation calls log.Fatal on JSON unmarshal errors,
-	// which would cause this test to exit the entire test suite
-	// This should be fixed in a future iteration when addressing Issue #5
-}
-
-// Backward Compatibility - Existing Cache
-// Ensures migration doesn't break existing cached data
-func TestBackwardCompatibilityWithExistingCache(t *testing.T) {
-	// Setup: Create temp directory
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+	path := filepath.Join(t.TempDir(), SavedWeatherFileName)
+	if _, err := LoadSavedWeather(path); err == nil {
+		t.Error("expected an error for a missing cache file")
 	}
-	defer os.RemoveAll(tempDir)
-
-	forecastPath := tempDir + SavedWeatherFileName
-
-	// Create directory structure
-	vaporwairDir := tempDir + VaporwairDir
-	err = os.MkdirAll(vaporwairDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create vaporwair dir: %v", err)
+	if err := os.WriteFile(path, []byte("{truncated"), 0644); err != nil {
+		t.Fatal(err)
 	}
-
-	// Simulate existing cache file created by old version (using ioutil)
-	// The format should be identical whether created with ioutil or os
-	sampleForecast := weather.Forecast{
-		Latitude:  40.7128,
-		Longitude: -74.0060,
-		Timezone:  "America/New_York",
-	}
-
-	// Save using current implementation
-	success := SaveWeatherForecast(forecastPath, sampleForecast)
-	if !success {
-		t.Fatal("Failed to save forecast")
-	}
-
-	// Load using current implementation (should work regardless of ioutil vs os)
-	loaded, err := LoadSavedWeather(forecastPath)
-	if err != nil {
-		t.Fatalf("Failed to load saved forecast: %v", err)
-	}
-
-	// Verify data integrity
-	if loaded.Latitude != sampleForecast.Latitude {
-		t.Errorf("Latitude mismatch after save/load: got %f, want %f",
-			loaded.Latitude, sampleForecast.Latitude)
-	}
-	if loaded.Longitude != sampleForecast.Longitude {
-		t.Errorf("Longitude mismatch after save/load: got %f, want %f",
-			loaded.Longitude, sampleForecast.Longitude)
-	}
-	if loaded.Timezone != sampleForecast.Timezone {
-		t.Errorf("Timezone mismatch after save/load: got %s, want %s",
-			loaded.Timezone, sampleForecast.Timezone)
+	if _, err := LoadSavedWeather(path); err == nil {
+		t.Error("expected an error for a truncated cache file")
 	}
 }
 
-// UpdateDefaultZipCode Preserves Permissions
-// Ensures updating config doesn't accidentally change file permissions
+// Updating the default zip keeps the config owner-only.
 func TestUpdateDefaultZipCodePreservesPermissions(t *testing.T) {
-	// Skip on Windows
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping Unix permission test on Windows")
 	}
-
-	// Setup: Create temp directory
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Create directory structure
-	vaporwairDir := tempDir + VaporwairDir
-	err = os.MkdirAll(vaporwairDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create vaporwair dir: %v", err)
-	}
-
-	// Create initial config with 0600
-	apiKey := "test-key"
-	err = CreateConfig(tempDir, apiKey)
-	if err != nil {
+	configPath := filepath.Join(t.TempDir(), ConfigFileName)
+	if err := CreateConfig(configPath, "test-key"); err != nil {
 		t.Fatalf("CreateConfig failed: %v", err)
 	}
 
-	configPath := tempDir + ConfigFileName
-
-	// Verify initial permissions
-	fileInfo, err := os.Stat(configPath)
-	if err != nil {
-		t.Fatalf("Failed to stat config: %v", err)
-	}
-	initialPerm := fileInfo.Mode().Perm()
-
-	// Test: UpdateDefaultZipCode
-	err = UpdateDefaultZipCode(tempDir, "10001")
-	if err != nil {
+	if err := UpdateDefaultZipCode(configPath, "10001"); err != nil {
 		t.Fatalf("UpdateDefaultZipCode failed: %v", err)
 	}
 
-	// Verify: Permissions still 0600
-	fileInfo, err = os.Stat(configPath)
+	fileInfo, err := os.Stat(configPath)
 	if err != nil {
 		t.Fatalf("Failed to stat config after update: %v", err)
 	}
-
-	updatedPerm := fileInfo.Mode().Perm()
-	expectedPerm := os.FileMode(0600)
-
-	if updatedPerm != expectedPerm {
-		t.Errorf("UpdateDefaultZipCode changed permissions: got %#o, want %#o", updatedPerm, expectedPerm)
+	if perm := fileInfo.Mode().Perm(); perm != 0600 {
+		t.Errorf("UpdateDefaultZipCode changed permissions: got %#o, want 0600", perm)
 	}
 
-	if updatedPerm != initialPerm {
-		t.Errorf("UpdateDefaultZipCode changed permissions from initial: was %#o, now %#o",
-			initialPerm, updatedPerm)
+	config, err := GetConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.DefaultZipCode != "10001" || config.AirNowAPIKey != "test-key" {
+		t.Errorf("config = %+v, want zip 10001 and the key kept", config)
 	}
 
-	// Verify zip code was actually updated
-	config := GetConfig(configPath)
-	if config.DefaultZipCode != "10001" {
-		t.Errorf("Zip code not updated: got %s, want 10001", config.DefaultZipCode)
+	if err := UpdateDefaultZipCode(configPath, ""); err != nil {
+		t.Fatal(err)
+	}
+	if config, _ := GetConfig(configPath); config.DefaultZipCode != "" {
+		t.Errorf("empty zip did not clear the default: %q", config.DefaultZipCode)
 	}
 }
 
-// Test: Verify Exists function works correctly
+// Atomic writes rename into place and leave no temp files behind.
+func TestWriteFileAtomic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "file.json")
+	for _, content := range []string{"first", "second"} {
+		if err := writeFileAtomic(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != content {
+			t.Errorf("read %q, %v; want %q", got, err, content)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("directory has %d entries, want only file.json", len(entries))
+	}
+}
+
 func TestExists(t *testing.T) {
-	// Test with existing file
-	tempFile, err := os.CreateTemp("", "test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
+	path := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(path, nil, 0644); err != nil {
+		t.Fatal(err)
 	}
-	tempPath := tempFile.Name()
-	tempFile.Close()
-	defer os.Remove(tempPath)
-
-	exists, err := Exists(tempPath)
-	if err != nil {
-		t.Errorf("Exists returned error for existing file: %v", err)
+	if exists, err := Exists(path); err != nil || !exists {
+		t.Errorf("Exists(existing) = %v, %v", exists, err)
 	}
-	if !exists {
-		t.Error("Exists returned false for existing file")
-	}
-
-	// Test with non-existent file
-	exists, err = Exists("/nonexistent/path/file.txt")
-	if err != nil {
-		t.Errorf("Exists returned error for non-existent file: %v", err)
-	}
-	if exists {
-		t.Error("Exists returned true for non-existent file")
+	if exists, err := Exists("/nonexistent/path/file.txt"); err != nil || exists {
+		t.Errorf("Exists(missing) = %v, %v", exists, err)
 	}
 }
 
-// Test: CreateVaporwairDir creates directory correctly
-func TestCreateVaporwairDir(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "vaporwair-test-*")
+// Config and cache follow the XDG variables, ignore relative values, and fall back to $HOME.
+func TestXDGDirs(t *testing.T) {
+	home := sandboxHome(t)
+
+	if dir, _ := ConfigDir(); dir != filepath.Join(home, ".config", "vaporwair") {
+		t.Errorf("ConfigDir() = %q with no XDG_CONFIG_HOME", dir)
+	}
+	if dir, _ := CacheDir(); dir != filepath.Join(home, ".cache", "vaporwair") {
+		t.Errorf("CacheDir() = %q with no XDG_CACHE_HOME", dir)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", "/xdg/config")
+	t.Setenv("XDG_CACHE_HOME", "relative/cache")
+	if dir, _ := ConfigDir(); dir != filepath.Join("/xdg/config", "vaporwair") {
+		t.Errorf("ConfigDir() = %q, want it under XDG_CONFIG_HOME", dir)
+	}
+	if dir, _ := CacheDir(); dir != filepath.Join(home, ".cache", "vaporwair") {
+		t.Errorf("CacheDir() = %q, want a relative XDG_CACHE_HOME ignored", dir)
+	}
+
+	if got := Tilde(filepath.Join(home, ".config", "vaporwair")); got != "~/.config/vaporwair" {
+		t.Errorf("Tilde = %q", got)
+	}
+	if got := Tilde(home + "x/file"); got != home+"x/file" {
+		t.Errorf("Tilde abbreviated a sibling directory: %q", got)
+	}
+}
+
+// The first run creates the directories and a config without prompting when stdin
+// isn't a terminal.
+func TestInitializeAppConfigFirstRun(t *testing.T) {
+	home := sandboxHome(t)
+	noTerminal(t)
+
+	appConfig, err := InitializeAppConfig()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
-
-	vaporwairPath := filepath.Join(tempDir, ".vaporwair")
-
-	// Directory shouldn't exist yet
-	if _, err := os.Stat(vaporwairPath); !os.IsNotExist(err) {
-		t.Fatal("Directory already exists before test")
+	if !appConfig.FirstRun {
+		t.Error("FirstRun = false on the first run")
+	}
+	if appConfig.ConfigFile() != filepath.Join(home, ".config", "vaporwair", "config.json") {
+		t.Errorf("ConfigFile() = %q", appConfig.ConfigFile())
+	}
+	if _, err := os.Stat(appConfig.CacheDir); err != nil {
+		t.Errorf("cache directory not created: %v", err)
 	}
 
-	// Create the directory
-	CreateVaporwairDir(vaporwairPath)
+	again, err := InitializeAppConfig()
+	if err != nil || again.FirstRun {
+		t.Errorf("second run: FirstRun %v, err %v", again.FirstRun, err)
+	}
+}
 
-	// Verify it exists and is a directory
-	fileInfo, err := os.Stat(vaporwairPath)
+// A config in ~/.vaporwair moves to the XDG config directory, and the old directory goes.
+func TestInitializeAppConfigMigratesLegacyDir(t *testing.T) {
+	home := sandboxHome(t)
+	noTerminal(t)
+	legacy := filepath.Join(home, ".vaporwair")
+	if err := os.MkdirAll(legacy, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, ConfigFileName), []byte(`{"airnowapikey":"old-key","defaultzipcode":"05401"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, SavedWeatherFileName), []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	appConfig, err := InitializeAppConfig()
 	if err != nil {
-		t.Fatalf("CreateVaporwairDir failed to create directory: %v", err)
+		t.Fatal(err)
 	}
-	if !fileInfo.IsDir() {
-		t.Error("CreateVaporwairDir created a file instead of directory")
+	if appConfig.FirstRun {
+		t.Error("a migrated config should not count as a first run")
+	}
+	if appConfig.Config.AirNowAPIKey != "old-key" || appConfig.Config.DefaultZipCode != "05401" {
+		t.Errorf("migrated config = %+v", appConfig.Config)
+	}
+	if info, err := os.Stat(appConfig.ConfigFile()); err != nil || info.Mode().Perm() != 0600 {
+		t.Errorf("migrated config file: %v, %v", info, err)
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Errorf("legacy directory still exists: %v", err)
+	}
+}
+
+// A save that fails partway leaves no call info, so the next run fetches again instead of
+// pairing the new location with the old forecast.
+func TestSaveForecastsWritesCallInfoLast(t *testing.T) {
+	a := AppConfig{CacheDir: t.TempDir()}
+	coords := geolocation.Coordinates{Latitude: "44.47", Longitude: "-73.21", Zip: "05401"}
+	if err := SaveForecasts(a, coords, false, weather.Forecast{}, []air.Forecast{}); err != nil {
+		t.Fatal(err)
+	}
+	if pc, err := LoadCallInfo(a.CacheFile(SavedCallFileName)); err != nil || pc.Coordinates != coords {
+		t.Fatalf("call info after a good save: %+v, %v", pc, err)
 	}
 
-	// Call again - should not error (idempotent)
-	CreateVaporwairDir(vaporwairPath)
-
-	// Verify still exists
-	if _, err := os.Stat(vaporwairPath); err != nil {
-		t.Error("CreateVaporwairDir not idempotent - directory disappeared on second call")
+	// A directory where the air file goes makes the second write fail.
+	if err := os.Mkdir(a.CacheFile(SavedAirFileName)+".blocker", 0755); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(a.CacheFile(SavedAirFileName))
+	if err := os.Rename(a.CacheFile(SavedAirFileName)+".blocker", a.CacheFile(SavedAirFileName)); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveForecasts(a, coords, false, weather.Forecast{}, []air.Forecast{}); err == nil {
+		t.Fatal("expected the air write to fail")
+	}
+	if _, err := LoadCallInfo(a.CacheFile(SavedCallFileName)); err == nil {
+		t.Error("call info survived a failed save")
 	}
 }

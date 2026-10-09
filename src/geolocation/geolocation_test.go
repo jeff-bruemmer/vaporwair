@@ -140,7 +140,14 @@ func TestGetGeoDataFromZip(t *testing.T) {
 		{
 			name:        "Invalid zip code - letters",
 			zipCode:     "ABCDE",
-			expectError: false, // Current implementation doesn't validate numeric
+			expectError: true,
+			errorMsg:    "must be 5 digits",
+		},
+		{
+			name:        "ZIP+4",
+			zipCode:     "05401-1234",
+			expectError: true,
+			errorMsg:    "use the 5-digit form, like 05401",
 		},
 	}
 

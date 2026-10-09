@@ -8,6 +8,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Coordinates struct {
@@ -87,10 +88,9 @@ type ipWhoResponse struct {
 // based on user's IP address.
 func GetGeoData(addr string) (GeoData, error) {
 	var gd GeoData
-	// Request coordinates from ipwho.is and specify timeout in seconds
-	resp, err := dialer.NetReq(addr, 5, false)
+	resp, err := dialer.Get(addr, 5*time.Second)
 	if err != nil {
-		return gd, fmt.Errorf("failed to connect to IP geolocation service (%s): %w", addr, err)
+		return gd, err
 	}
 	defer resp.Body.Close()
 
@@ -127,26 +127,43 @@ func GetGeoData(addr string) (GeoData, error) {
 	return gd, nil
 }
 
+// ValidateZip reports whether zip is a 5-digit US zip code, with a hint for ZIP+4.
+func ValidateZip(zip string) error {
+	if len(zip) == 10 && zip[5] == '-' && isDigits(zip[:5]) && isDigits(zip[6:]) {
+		return fmt.Errorf("zip code %q: use the 5-digit form, like %s", zip, zip[:5])
+	}
+	if len(zip) != 5 || !isDigits(zip) {
+		return fmt.Errorf("zip code %q must be 5 digits, like 05401", zip)
+	}
+	return nil
+}
+
+func isDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
+}
+
 // GetGeoDataFromZip retrieves geolocation data from a US zip code.
 func GetGeoDataFromZip(zipCode string) (GeoData, error) {
 	var gd GeoData
 
-	// Validate zip code format
-	if len(zipCode) != 5 {
-		return gd, fmt.Errorf("invalid zip code format '%s' (must be 5 digits)", zipCode)
+	if err := ValidateZip(zipCode); err != nil {
+		return gd, err
 	}
 
-	// Call zippopotam.us API
-	url := ZipCodeAPIAddress + zipCode
-	resp, err := dialer.NetReq(url, 5, false)
+	resp, err := dialer.Get(ZipCodeAPIAddress+zipCode, 5*time.Second)
 	if err != nil {
-		return gd, fmt.Errorf("failed to connect to zip code lookup service: %w", err)
+		return gd, err
 	}
 	defer resp.Body.Close()
 
 	// Check HTTP status
 	if resp.StatusCode == 404 {
-		return gd, fmt.Errorf("zip code '%s' not found - please verify it's a valid US zip code", zipCode)
+		return gd, fmt.Errorf("zip code %s was not found; check that it is a valid US zip code", zipCode)
 	}
 	if resp.StatusCode != 200 {
 		return gd, fmt.Errorf("zip code lookup service returned error status %d", resp.StatusCode)
@@ -159,7 +176,7 @@ func GetGeoDataFromZip(zipCode string) (GeoData, error) {
 	}
 
 	if len(zipResp.Places) == 0 {
-		return gd, fmt.Errorf("no location data found for zip code '%s'", zipCode)
+		return gd, fmt.Errorf("no location data found for zip code %s", zipCode)
 	}
 
 	// Convert to GeoData format

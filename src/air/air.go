@@ -8,6 +8,7 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
 	"io"
 	"strings"
+	"time"
 )
 
 type Category struct {
@@ -73,23 +74,23 @@ func BuildAirNowURL(addr string, zipCode string, apiKey string) string {
 func GetForecast(addr string) ([]Forecast, error) {
 	var af []apiForecast
 
-	resp, err := dialer.NetReq(addr, 10, false)
+	resp, err := dialer.Get(addr, 10*time.Second)
 	if err != nil {
-		return []Forecast{}, fmt.Errorf("request failed: %w", err)
+		return []Forecast{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		if msg := strings.TrimSpace(string(body)); msg != "" {
-			return []Forecast{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, msg)
+			return []Forecast{}, fmt.Errorf("AirNow returned HTTP %d: %s", resp.StatusCode, msg)
 		}
-		return []Forecast{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return []Forecast{}, fmt.Errorf("AirNow returned HTTP %d", resp.StatusCode)
 	}
 
 	err = json.NewDecoder(resp.Body).Decode(&af)
 	if err != nil {
-		return []Forecast{}, fmt.Errorf("could not decode response: %w", err)
+		return []Forecast{}, fmt.Errorf("could not read AirNow's response: %w", err)
 	}
 
 	forecasts := make([]Forecast, 0, len(af))

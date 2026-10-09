@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 	"testing"
+	"time"
 )
 
 // Sample NOAA Points API response
@@ -36,33 +37,33 @@ func getSampleNOAADailyForecastDayFirst() NOAAForecastResponse {
 			Updated: "2025-10-24T12:00:00+00:00",
 			Periods: []NOAAPeriod{
 				{
-					Number:        1,
-					Name:          "Today",
-					StartTime:     "2025-10-24T06:00:00-04:00",
-					EndTime:       "2025-10-24T18:00:00-04:00",
-					IsDaytime:     true,
-					Temperature:   75,
-					TemperatureUnit: "F",
-					WindSpeed:     "10 to 15 mph",
-					WindDirection: "SW",
-					ShortForecast: "Partly Cloudy",
-					DetailedForecast: "Partly cloudy skies throughout the day.",
+					Number:                     1,
+					Name:                       "Today",
+					StartTime:                  "2025-10-24T06:00:00-04:00",
+					EndTime:                    "2025-10-24T18:00:00-04:00",
+					IsDaytime:                  true,
+					Temperature:                75,
+					TemperatureUnit:            "F",
+					WindSpeed:                  "10 to 15 mph",
+					WindDirection:              "SW",
+					ShortForecast:              "Partly Cloudy",
+					DetailedForecast:           "Partly cloudy skies throughout the day.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
 				},
 				{
-					Number:        2,
-					Name:          "Tonight",
-					StartTime:     "2025-10-24T18:00:00-04:00",
-					EndTime:       "2025-10-25T06:00:00-04:00",
-					IsDaytime:     false,
-					Temperature:   55,
-					TemperatureUnit: "F",
-					WindSpeed:     "5 to 10 mph",
-					WindDirection: "S",
-					ShortForecast: "Mostly Clear",
-					DetailedForecast: "Mostly clear skies overnight.",
+					Number:                     2,
+					Name:                       "Tonight",
+					StartTime:                  "2025-10-24T18:00:00-04:00",
+					EndTime:                    "2025-10-25T06:00:00-04:00",
+					IsDaytime:                  false,
+					Temperature:                55,
+					TemperatureUnit:            "F",
+					WindSpeed:                  "5 to 10 mph",
+					WindDirection:              "S",
+					ShortForecast:              "Mostly Clear",
+					DetailedForecast:           "Mostly clear skies overnight.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
@@ -83,33 +84,33 @@ func getSampleNOAADailyForecastNightFirst() NOAAForecastResponse {
 			Updated: "2025-10-24T20:00:00+00:00",
 			Periods: []NOAAPeriod{
 				{
-					Number:        1,
-					Name:          "Tonight",
-					StartTime:     "2025-10-24T18:00:00-04:00",
-					EndTime:       "2025-10-25T06:00:00-04:00",
-					IsDaytime:     false,
-					Temperature:   50,
-					TemperatureUnit: "F",
-					WindSpeed:     "5 mph",
-					WindDirection: "NW",
-					ShortForecast: "Clear",
-					DetailedForecast: "Clear skies overnight.",
+					Number:                     1,
+					Name:                       "Tonight",
+					StartTime:                  "2025-10-24T18:00:00-04:00",
+					EndTime:                    "2025-10-25T06:00:00-04:00",
+					IsDaytime:                  false,
+					Temperature:                50,
+					TemperatureUnit:            "F",
+					WindSpeed:                  "5 mph",
+					WindDirection:              "NW",
+					ShortForecast:              "Clear",
+					DetailedForecast:           "Clear skies overnight.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
 				},
 				{
-					Number:        2,
-					Name:          "Tomorrow",
-					StartTime:     "2025-10-25T06:00:00-04:00",
-					EndTime:       "2025-10-25T18:00:00-04:00",
-					IsDaytime:     true,
-					Temperature:   80,
-					TemperatureUnit: "F",
-					WindSpeed:     "10 mph",
-					WindDirection: "W",
-					ShortForecast: "Sunny",
-					DetailedForecast: "Sunny skies throughout the day.",
+					Number:                     2,
+					Name:                       "Tomorrow",
+					StartTime:                  "2025-10-25T06:00:00-04:00",
+					EndTime:                    "2025-10-25T18:00:00-04:00",
+					IsDaytime:                  true,
+					Temperature:                80,
+					TemperatureUnit:            "F",
+					WindSpeed:                  "10 mph",
+					WindDirection:              "W",
+					ShortForecast:              "Sunny",
+					DetailedForecast:           "Sunny skies throughout the day.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
@@ -130,33 +131,33 @@ func getSampleNOAAHourlyForecast() NOAAForecastResponse {
 			Updated: "2025-10-24T12:00:00+00:00",
 			Periods: []NOAAPeriod{
 				{
-					Number:        1,
-					Name:          "Now",
-					StartTime:     "2025-10-24T12:00:00-04:00",
-					EndTime:       "2025-10-24T13:00:00-04:00",
-					IsDaytime:     true,
-					Temperature:   72,
-					TemperatureUnit: "F",
-					WindSpeed:     "12 mph",
-					WindDirection: "SW",
-					ShortForecast: "Partly Cloudy",
-					DetailedForecast: "Partly cloudy conditions.",
+					Number:                     1,
+					Name:                       "Now",
+					StartTime:                  "2025-10-24T12:00:00-04:00",
+					EndTime:                    "2025-10-24T13:00:00-04:00",
+					IsDaytime:                  true,
+					Temperature:                72,
+					TemperatureUnit:            "F",
+					WindSpeed:                  "12 mph",
+					WindDirection:              "SW",
+					ShortForecast:              "Partly Cloudy",
+					DetailedForecast:           "Partly cloudy conditions.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
 				},
 				{
-					Number:        2,
-					Name:          "1pm",
-					StartTime:     "2025-10-24T13:00:00-04:00",
-					EndTime:       "2025-10-24T14:00:00-04:00",
-					IsDaytime:     true,
-					Temperature:   74,
-					TemperatureUnit: "F",
-					WindSpeed:     "13 mph",
-					WindDirection: "SW",
-					ShortForecast: "Mostly Sunny",
-					DetailedForecast: "Mostly sunny conditions.",
+					Number:                     2,
+					Name:                       "1pm",
+					StartTime:                  "2025-10-24T13:00:00-04:00",
+					EndTime:                    "2025-10-24T14:00:00-04:00",
+					IsDaytime:                  true,
+					Temperature:                74,
+					TemperatureUnit:            "F",
+					WindSpeed:                  "13 mph",
+					WindDirection:              "SW",
+					ShortForecast:              "Mostly Sunny",
+					DetailedForecast:           "Mostly sunny conditions.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
@@ -238,25 +239,53 @@ func TestConvertNOAADailyPeriodsToDataBlock_NightFirst(t *testing.T) {
 	daily := getSampleNOAADailyForecastNightFirst()
 	block := convertNOAADailyPeriodsToDataBlock(daily.Properties.Periods)
 
-	if len(block.Data) != 1 {
-		t.Fatalf("Expected 1 daily data point, got %d", len(block.Data))
+	// In the evening, "Tonight" must stay Data[0]; pairing it with tomorrow would
+	// make every report's "today" describe tomorrow.
+	if len(block.Data) != 2 {
+		t.Fatalf("Expected 2 daily data points (Tonight, Tomorrow), got %d", len(block.Data))
 	}
 
-	dp := block.Data[0]
+	tonight, tomorrow := block.Data[0], block.Data[1]
 
-	// When night period is first, max temp should still be from day (80), min from night (50)
-	// This tests the swap logic
-	if dp.TemperatureMax != 80 {
-		t.Errorf("Expected max temperature 80 (from day period), got %f", dp.TemperatureMax)
+	if tonight.PeriodName != "Tonight" {
+		t.Errorf("Expected first entry 'Tonight', got %q", tonight.PeriodName)
+	}
+	if tonight.TemperatureMin != 50 {
+		t.Errorf("Expected tonight's low 50, got %f", tonight.TemperatureMin)
+	}
+	if tonight.Summary != "Clear" {
+		t.Errorf("Expected tonight's summary 'Clear', got %q", tonight.Summary)
 	}
 
-	if dp.TemperatureMin != 50 {
-		t.Errorf("Expected min temperature 50 (from night period), got %f", dp.TemperatureMin)
+	if tomorrow.PeriodName != "Tomorrow" {
+		t.Errorf("Expected second entry 'Tomorrow', got %q", tomorrow.PeriodName)
 	}
+	if tomorrow.TemperatureMax != 80 {
+		t.Errorf("Expected tomorrow's high 80, got %f", tomorrow.TemperatureMax)
+	}
+}
 
-	// Verify the summary comes from the day period, not the night period
-	if dp.Summary != "Sunny" {
-		t.Errorf("Expected summary 'Sunny' (from day period), got '%s'", dp.Summary)
+func TestTonightHighFromHourly(t *testing.T) {
+	now := time.Now().Truncate(time.Hour)
+	at := func(h int) string { return now.Add(time.Duration(h) * time.Hour).Format(time.RFC3339) }
+
+	daily := getSampleNOAADailyForecastNightFirst()
+	daily.Properties.Periods[0].StartTime = at(-2)
+	daily.Properties.Periods[0].EndTime = at(10)
+	hourly := NOAAForecastResponse{Properties: NOAAForecastProperties{Periods: []NOAAPeriod{
+		{StartTime: at(-2), Temperature: 66}, // already over; NOAA's feed lags
+		{StartTime: at(0), Temperature: 61},  // in progress
+		{StartTime: at(1), Temperature: 58},
+		{StartTime: at(11), Temperature: 70}, // after tonight ends
+	}}}
+
+	f := ConvertNOAAToForecast(NOAAPointsResponse{}, daily, hourly, geolocation.Coordinates{})
+
+	if got := f.Daily.Data[0].TemperatureMax; got != 61 {
+		t.Errorf("Expected tonight's high to be warmest remaining hour (61), got %f", got)
+	}
+	if got := f.Daily.Data[0].TemperatureMin; got != 50 {
+		t.Errorf("Expected tonight's low 50, got %f", got)
 	}
 }
 
@@ -266,14 +295,14 @@ func TestConvertNOAAPeriodToDataPoint(t *testing.T) {
 	humidity := 75.0
 
 	period := NOAAPeriod{
-		Number:        1,
-		Name:          "Today",
-		StartTime:     "2025-10-24T12:00:00-04:00",
-		IsDaytime:     true,
-		Temperature:   70,
-		WindSpeed:     "10 to 15 mph",
-		WindDirection: "NE",
-		ShortForecast: "Rain",
+		Number:                     1,
+		Name:                       "Today",
+		StartTime:                  "2025-10-24T12:00:00-04:00",
+		IsDaytime:                  true,
+		Temperature:                70,
+		WindSpeed:                  "10 to 15 mph",
+		WindDirection:              "NE",
+		ShortForecast:              "Rain",
 		ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 		Dewpoint:                   NOAAValue{Value: &dewpoint},
 		RelativeHumidity:           NOAAValue{Value: &humidity},
@@ -851,12 +880,12 @@ func TestPrecipTypeUnicodeHandling(t *testing.T) {
 		forecast     string
 		expectedType string
 	}{
-		{"Light rain", "rain"},           // ASCII lowercase
-		{"Light Rain", "rain"},           // ASCII uppercase
-		{"LIGHT RAIN", "rain"},           // ASCII all caps
-		{"Light Räin", ""},               // Unicode - current code breaks
-		{"Légère pluie", ""},             // French with accents
-		{"Дождь", ""},                    // Cyrillic (means "rain" in Russian)
+		{"Light rain", "rain"}, // ASCII lowercase
+		{"Light Rain", "rain"}, // ASCII uppercase
+		{"LIGHT RAIN", "rain"}, // ASCII all caps
+		{"Light Räin", ""},     // Unicode - current code breaks
+		{"Légère pluie", ""},   // French with accents
+		{"Дождь", ""},          // Cyrillic (means "rain" in Russian)
 	}
 
 	for _, test := range tests {

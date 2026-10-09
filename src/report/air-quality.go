@@ -1,23 +1,21 @@
 package report
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
+
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
 )
 
-// AirQuality prints AQI levels for today and tomorrow.
-// Includes O3, PM2.5, PM10, NO2, and CO indices.
+// AirQuality prints AQI levels for each forecast day and pollutant.
 func AirQuality(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Air Quality Forecast"))
 
-	// Check if any forecasts are available
-	if len(a) == 0 {
-		fmt.Println("\nNo air quality data available.")
-		return
-	}
-
-	// Check if we have any category data to display (even if numeric AQI is -1)
+	// Category data can exist even when the numeric AQI is still pending (-1)
 	hasData := false
 	for _, f := range a {
 		if f.Category.Name != "" {
@@ -25,52 +23,51 @@ func AirQuality(w weather.Forecast, a []air.Forecast) {
 			break
 		}
 	}
-
 	if !hasData {
-		fmt.Println("\nNo air quality data available.")
+		fmt.Println("No air quality data available.")
 		return
 	}
 
-	format := "%s\t%v\t%v\t%s\n"
-	formatNoPending := "%s\t%s\t%v\t%s\n"
-	date := ""
-	fmt.Fprintf(TW, "Type\tAQI\tCategory\tDescription\n")
-	fmt.Fprintf(TW, "----\t---\t--------\t-----------\n")
-	for _, f := range a {
-		if f.DateForecast != date {
-			fmt.Println()
-			date = f.DateForecast
-			fmt.Println(date)
-			fmt.Println("==========")
-		}
-
-		// If we have a numeric AQI, show it
-		if f.AQI >= 0 {
-			fmt.Fprintf(TW, format,
-				f.ParameterName,
-				f.AQI,
-				f.Category.Number,
-				f.Category.Name)
-		} else {
-			// No numeric AQI yet, but show category if available
-			fmt.Fprintf(TW, formatNoPending,
-				f.ParameterName,
-				"pending",
-				f.Category.Number,
-				f.Category.Name)
-		}
-		TW.Flush()
-	}
-
-	// Add note if any AQI values are pending
+	// Same layout as the other tables: the date shows once per day, and each day's
+	// pollutants are sorted by name so rows line up from one day to the next.
+	rows := slices.Clone(a)
+	slices.SortStableFunc(rows, func(x, y air.Forecast) int {
+		return cmp.Or(
+			cmp.Compare(strings.TrimSpace(x.DateForecast), strings.TrimSpace(y.DateForecast)),
+			cmp.Compare(x.ParameterName, y.ParameterName))
+	})
+	printTableHeader([]column{{"Day", ""}, {"Pollutant", ""}, {"AQI", ""}, {"Category", ""}})
 	anyPending := false
-	for _, f := range a {
-		if f.AQI < 0 {
-			anyPending = true
-			break
+	prevDate := ""
+	for _, f := range rows {
+		date := formatAQIDate(f.DateForecast)
+		day := date
+		if date == prevDate {
+			day = ""
 		}
+		prevDate = date
+
+		aqi := "pending"
+		if f.AQI >= 0 {
+			aqi = fmt.Sprint(f.AQI)
+		} else {
+			anyPending = true
+		}
+		fmt.Fprintf(Table, "%s\t%s\t%s\t%s\n", day, f.ParameterName, aqi, AQICategory(f.Category.Name))
 	}
+	Table.Flush()
+
 	if anyPending {
-		fmt.Println("\nNote: Numeric AQI values marked 'pending' will be updated later in the day.")
+		fmt.Println("\nNote: 'pending' AQI values are published later in the day.")
 	}
+}
+
+// formatAQIDate turns AirNow's "2025-10-24" into "Fri Oct 24", leaving unparseable dates as-is.
+func formatAQIDate(d string) string {
+	d = strings.TrimSpace(d)
+	t, err := time.Parse("2006-01-02", d)
+	if err != nil {
+		return d
+	}
+	return t.Format("Mon Jan 2")
 }

@@ -13,37 +13,73 @@ func WeatherHourly(w weather.Forecast, a []air.Forecast) {
 		fmt.Println()
 	}
 
-	// Enhanced hourly table with additional NOAA fields
-	format := "%v\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%.0f %s\t%s\n"
-	fmt.Fprintf(TW, "Period\tTemp\tFeels\tDewpoint\tPrecip\tHumidity\tWind\tGust\n")
-	fmt.Fprintf(TW, "------\t----\t-----\t--------\t------\t--------\t----\t----\n")
-	d := LimitData(w.Hourly.Data, 12)
-	for _, h := range d {
-		gustStr := "-"
-		if h.WindGust > 0 {
-			gustStr = fmt.Sprintf("%.0f %s", h.WindGust, windSpeedUnit)
-		}
-		// Period name (e.g., "This Afternoon") is more descriptive than time alone
-		periodLabel := h.PeriodName
-		if periodLabel == "" {
-			periodLabel = FormatTime(h.Time)
-		}
+	hoursTable(LimitData(upcomingHours(w.Hourly.Data), DefaultHourlyLimit), true)
+}
 
-		// Calculate feels like temperature
-		feelsLike := h.ApparentTemperature
-		if feelsLike == 0 {
-			feelsLike = h.Temperature
-		}
+// hoursTable prints one row per hour. Insights' Next Few Hours and the hourly report share it,
+// so both use the same columns in the same order; detail adds dewpoint and humidity.
+// Precip and Gust columns appear only when some hour has a value.
+func hoursTable(hours []weather.DataPoint, detail bool) {
+	showPrecip, showGust := anyPrecip(hours), anyGust(hours)
 
-		fmt.Fprintf(TW, format,
-			periodLabel,
-			h.Temperature, temperatureUnit,
-			feelsLike, temperatureUnit,
-			h.DewPoint, temperatureUnit,
-			ToPercent(h.PrecipProbability), percentUnit,
-			ToPercent(h.Humidity), percentUnit,
-			h.WindSpeed, windSpeedUnit,
-			gustStr)
+	// Units live in the second header row so cells hold bare numbers and the table fits 80 columns.
+	cols := []column{{"Time", ""}, {"Temp", temperatureUnit}, {"Feels", temperatureUnit}}
+	if detail {
+		cols = append(cols, column{"Dew", temperatureUnit})
 	}
-	TW.Flush()
+	if showPrecip {
+		cols = append(cols, column{"Precip", percentUnit})
+	}
+	if detail {
+		cols = append(cols, column{"Humid", percentUnit})
+	}
+	cols = append(cols, column{"Wind", windSpeedUnit})
+	if showGust {
+		cols = append(cols, column{"Gust", windSpeedUnit})
+	}
+	fixed := tableFixedWidth(cols, len("00:00"))
+	cols = append(cols, column{"Conditions", ""})
+	printTableHeader(cols)
+
+	// Leave conditions blank when unchanged from the row above, so changes stand out.
+	prevConditions := ""
+	for _, h := range hours {
+		label := h.PeriodName
+		if label == "" {
+			label = FormatTime(h.Time)
+		}
+		conditions := Truncate(h.Summary, max(ReportWidth-fixed, 12))
+		if h.Summary == prevConditions {
+			conditions = ""
+		}
+		prevConditions = h.Summary
+
+		fmt.Fprintf(Table, "%s\t%.0f\t%.0f\t", label, Round(h.Temperature), Round(h.ApparentTemperature))
+		if detail {
+			fmt.Fprintf(Table, "%.0f\t", h.DewPoint)
+		}
+		if showPrecip {
+			fmt.Fprintf(Table, "%.0f\t", ToPercent(h.PrecipProbability))
+		}
+		if detail {
+			fmt.Fprintf(Table, "%.0f\t", ToPercent(h.Humidity))
+		}
+		fmt.Fprintf(Table, "%.0f %s\t", h.WindSpeed, DegreesToCardinal(h.WindBearing))
+		if showGust {
+			fmt.Fprintf(Table, "%s\t", gustCell(h.WindGust))
+		}
+		fmt.Fprintf(Table, "%s\n", conditions)
+	}
+	Table.Flush()
+}
+
+// anyPrecip reports whether any data point has a chance of precipitation,
+// so an all-zero Precip column can be dropped.
+func anyPrecip(data []weather.DataPoint) bool {
+	for _, d := range data {
+		if d.PrecipProbability > 0 {
+			return true
+		}
+	}
+	return false
 }

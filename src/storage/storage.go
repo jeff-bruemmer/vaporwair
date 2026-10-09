@@ -8,22 +8,25 @@ import (
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
-	"io"
-	"log"
 	"os"
-	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 // Application configuration and caching constants.
+// Config lives in the XDG config directory, cached forecasts in the XDG cache directory.
 const (
-	VaporwairDir           = "/.vaporwair/"
-	SavedWeatherFileName   = VaporwairDir + "weather-forecast.json"
-	SavedAirFileName       = VaporwairDir + "air-forecast.json"
-	ConfigFileName         = VaporwairDir + "config.json"
-	SavedCallFileName      = VaporwairDir + "last-call.json"
-	CacheTimeoutMinutes    = 5
+	AppDirName           = "vaporwair"
+	ConfigFileName       = "config.json"
+	SavedWeatherFileName = "weather-forecast.json"
+	SavedAirFileName     = "air-forecast.json"
+	SavedCallFileName    = "last-call.json"
+	CacheTimeoutMinutes  = 5
+
+	// legacyDirName is ~/.vaporwair, which held config and cache before vaporwair
+	// followed the XDG base directories. InitializeAppConfig moves its config once.
+	legacyDirName = ".vaporwair"
 )
 
 // Config stores API keys and settings (NOAA doesn't require an API key).
@@ -34,52 +37,79 @@ type Config struct {
 
 // AppConfig holds runtime configuration for the application.
 type AppConfig struct {
-	Config             Config
-	HomeDir            string
+	Config              Config
+	ConfigDir           string
+	CacheDir            string
 	CacheTimeoutMinutes float64
+	// FirstRun is true when this run created the config file.
+	FirstRun bool
 }
 
+// ConfigFile is the path of config.json.
+func (a AppConfig) ConfigFile() string { return filepath.Join(a.ConfigDir, ConfigFileName) }
+
+// CacheFile is the path of a cached file such as SavedWeatherFileName.
+func (a AppConfig) CacheFile(name string) string { return filepath.Join(a.CacheDir, name) }
+
 // APICallInfo contains metadata to determine validity of last API call.
+// It is written after the forecasts it describes, so finding it means they are complete.
 type APICallInfo struct {
 	Time        time.Time
 	Coordinates geolocation.Coordinates
+	// ByIP is true when the coordinates came from IP lookup rather than a zip code.
+	ByIP bool `json:",omitempty"`
 }
 
-// Determines home directory in order to create vaporwair
-// directory to cache forecasts and call data.
-func GetHomeDir() (string, error) {
-	usr, err := user.Current()
-	return usr.HomeDir, err
+// ConfigDir returns $XDG_CONFIG_HOME/vaporwair, or ~/.config/vaporwair.
+func ConfigDir() (string, error) { return xdgDir("XDG_CONFIG_HOME", ".config") }
+
+// CacheDir returns $XDG_CACHE_HOME/vaporwair, or ~/.cache/vaporwair.
+func CacheDir() (string, error) { return xdgDir("XDG_CACHE_HOME", ".cache") }
+
+// xdgDir follows the XDG base directory spec on every platform, so the config file is in
+// the same easy-to-type place on macOS as on Linux. The spec says to ignore relative paths.
+func xdgDir(env, fallback string) (string, error) {
+	if dir := os.Getenv(env); filepath.IsAbs(dir) {
+		return filepath.Join(dir, AppDirName), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("unable to determine home directory: %w", err)
+	}
+	return filepath.Join(home, fallback, AppDirName), nil
 }
 
-// Capture takes a prompt and returns user-entered string.
+// Tilde abbreviates the home directory at the start of path as "~", for messages.
+func Tilde(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
+	if rest, ok := strings.CutPrefix(path, home); ok && (rest == "" || rest[0] == filepath.Separator) {
+		return "~" + rest
+	}
+	return path
+}
+
+// Capture takes a prompt and returns user-entered string. The prompt goes to stderr so it
+// never lands in a piped report, and with no terminal on stdin it returns "" without asking.
 func Capture(prompt string) string {
+	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return ""
+	}
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print(prompt)
+	fmt.Fprint(os.Stderr, prompt)
 	text, _ := reader.ReadString('\n')
 	return strings.TrimSpace(text)
 }
 
-func CreateConfig(homeDir, anak string) error {
-	path := homeDir + ConfigFileName
-	config := Config{}
-	config.AirNowAPIKey = anak
-	c, err := json.Marshal(config)
-	if err != nil {
-		fmt.Println("There was an error marshalling the configuration.")
-		return err
-	}
-	// Use 0600 permissions for config file (contains API keys)
-	// os.WriteFile will create the file if it doesn't exist
-	err = os.WriteFile(path, c, 0600)
-	if err != nil {
-		fmt.Println("There was an error writing the config file to ", path)
-		return err
-	}
-	return nil
+// CreateConfig writes a new config file at path holding the AirNow API key.
+// The file is 0600 because it holds the key.
+func CreateConfig(path, anak string) error {
+	return saveJSON(path, Config{AirNowAPIKey: anak}, 0600)
 }
 
-// exists returns whether the given file or directory exists
+// Exists returns whether the given file or directory exists
 func Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
@@ -91,134 +121,142 @@ func Exists(path string) (bool, error) {
 	return true, err
 }
 
-// CreateVaporwairDir creates a directory to cache forecasts and call data.
-// Uses os.MkdirAll which is idempotent - safe to call even if directory exists.
-func CreateVaporwairDir(path string) {
-	os.MkdirAll(path, 0755)
-}
-
 // Loads previous weather forecast.
+// A missing or unreadable cache is an error for the caller to handle, not a fatal one.
 func LoadSavedWeather(path string) (weather.Forecast, error) {
 	var f weather.Forecast
 	b, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Println("Error reading forecast from disk.", err)
+		return f, err
 	}
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Fatal("Error unmarshalling json into Forecast.", err)
+	if err := json.Unmarshal(b, &f); err != nil {
+		return f, fmt.Errorf("reading cached forecast %s: %w", path, err)
 	}
 	return f, nil
 }
 
 // Loads previous air quality forecast.
+// A missing or unreadable cache is an error for the caller to handle, not a fatal one.
 func LoadSavedAir(path string) ([]air.Forecast, error) {
 	var f []air.Forecast
 	b, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Println("Error reading forecast from disk.", err)
+		return f, err
 	}
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Fatal("Error unmarshalling json into Forecast.", err)
+	if err := json.Unmarshal(b, &f); err != nil {
+		return f, fmt.Errorf("reading cached forecast %s: %w", path, err)
 	}
 	return f, nil
 }
 
-// GetConfig loads API keys from the config file.
-func GetConfig(filepath string) Config {
-	configFile, err := os.Open(filepath)
-	if err != nil {
-		fmt.Println("Could not find config file in home directory.")
-		log.Fatal(err)
-	}
-	defer configFile.Close()
+// GetConfig loads API keys and settings from the config file.
+func GetConfig(path string) (Config, error) {
 	var config Config
-	bytes, _ := io.ReadAll(configFile)
-	// Validate json data
-	valid := json.Valid(bytes)
-	if !valid {
-		log.Fatal("\nThe config file:\n", filepath, "\ndoes not contain valid JSON.")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return config, fmt.Errorf("reading config file: %w", err)
 	}
-	json.Unmarshal(bytes, &config)
-
-	// Trim whitespace from API key
+	if err := json.Unmarshal(b, &config); err != nil {
+		return config, fmt.Errorf("config file %s is not valid JSON (%v); fix it, or delete it to run setup again", Tilde(path), err)
+	}
 	config.AirNowAPIKey = strings.TrimSpace(config.AirNowAPIKey)
-
-	return config
+	return config, nil
 }
 
 // InitializeAppConfig sets up and returns the complete application configuration.
-// It creates necessary directories and files if they don't exist.
+// It creates the config and cache directories and, on first run, the config file.
 func InitializeAppConfig() (AppConfig, error) {
-	var appConfig AppConfig
+	appConfig := AppConfig{CacheTimeoutMinutes: CacheTimeoutMinutes}
 
-	homeDir, err := GetHomeDir()
-	if err != nil {
-		return appConfig, fmt.Errorf("unable to determine home directory: %w", err)
+	var err error
+	if appConfig.ConfigDir, err = ConfigDir(); err != nil {
+		return appConfig, err
+	}
+	if appConfig.CacheDir, err = CacheDir(); err != nil {
+		return appConfig, err
+	}
+	// The config directory is private: the config file holds the API key.
+	if err := os.MkdirAll(appConfig.ConfigDir, 0700); err != nil {
+		return appConfig, fmt.Errorf("creating config directory: %w", err)
+	}
+	if err := os.MkdirAll(appConfig.CacheDir, 0755); err != nil {
+		return appConfig, fmt.Errorf("creating cache directory: %w", err)
 	}
 
-	appConfig.HomeDir = homeDir
-	appConfig.CacheTimeoutMinutes = CacheTimeoutMinutes
-
-	// Create vaporwair directory if it doesn't exist
-	CreateVaporwairDir(homeDir + VaporwairDir)
-
-	// Check if configuration file exists
-	configFile := homeDir + ConfigFileName
-	configExists, _ := Exists(configFile)
-
-	// If config doesn't exist, create it with user input
-	if !configExists {
-		ANAPIKey := Capture("Enter Air Now API key: ")
-		err := CreateConfig(homeDir, ANAPIKey)
+	configFile := appConfig.ConfigFile()
+	if exists, _ := Exists(configFile); !exists {
+		moved, err := migrateLegacyConfig(configFile)
 		if err != nil {
-			return appConfig, fmt.Errorf("error creating configuration: %w", err)
+			return appConfig, err
+		}
+		if !moved {
+			appConfig.FirstRun = true
+			key := Capture("Enter AirNow API key (press Enter to skip): ")
+			if err := CreateConfig(configFile, key); err != nil {
+				return appConfig, fmt.Errorf("creating config file: %w", err)
+			}
 		}
 	}
 
-	// Load API keys
-	appConfig.Config = GetConfig(configFile)
-
-	return appConfig, nil
+	appConfig.Config, err = GetConfig(configFile)
+	return appConfig, err
 }
 
-// UpdateDefaultZipCode saves the zip code as the default in the config file.
-func UpdateDefaultZipCode(homeDir string, zipCode string) error {
-	configFile := homeDir + ConfigFileName
-	config := GetConfig(configFile)
-
-	// Update the default zip code
-	config.DefaultZipCode = zipCode
-
-	// Save back to file
-	configData, err := json.Marshal(config)
+// migrateLegacyConfig moves config.json out of ~/.vaporwair and deletes the old cache
+// files, then the directory if nothing else is in it. It reports whether a config moved.
+func migrateLegacyConfig(configFile string) (bool, error) {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("error marshalling config: %w", err)
+		return false, nil
 	}
-
-	// Use 0600 permissions for config file (contains API keys)
-	err = os.WriteFile(configFile, configData, 0600)
+	legacy := filepath.Join(home, legacyDirName)
+	data, err := os.ReadFile(filepath.Join(legacy, ConfigFileName))
 	if err != nil {
-		return fmt.Errorf("error writing config file: %w", err)
+		return false, nil // nothing to move
 	}
-
-	return nil
+	if err := writeFileAtomic(configFile, data, 0600); err != nil {
+		return false, fmt.Errorf("moving config from %s: %w", Tilde(legacy), err)
+	}
+	for _, name := range []string{ConfigFileName, SavedWeatherFileName, SavedAirFileName, SavedCallFileName} {
+		os.Remove(filepath.Join(legacy, name))
+	}
+	os.Remove(legacy) // fails, harmlessly, if the user kept other files there
+	fmt.Fprintf(os.Stderr, "Note: moved config from %s to %s\n", Tilde(legacy), Tilde(configFile))
+	return true, nil
 }
 
-func UpdateLastCall(c geolocation.Coordinates, path string) error {
-	// After call, save report.
-	newCallInfo := APICallInfo{
-		Time:        time.Now(),
-		Coordinates: c,
-	}
-	err := SaveCall(path, newCallInfo)
+// UpdateDefaultZipCode saves the zip code as the default in the config file at path.
+// An empty zip code clears the default.
+func UpdateDefaultZipCode(path string, zipCode string) error {
+	config, err := GetConfig(path)
 	if err != nil {
-		fmt.Println("Error saving call info.\n", err)
 		return err
-	} else {
-		return nil
 	}
+	config.DefaultZipCode = zipCode
+	return saveJSON(path, config, 0600)
+}
+
+// SaveForecasts caches both forecasts and the call info that vouches for them. The call
+// info is removed first and written last, so a save that fails or is interrupted midway
+// leaves no cache, rather than one that pairs a location with another place's forecast.
+func SaveForecasts(a AppConfig, c geolocation.Coordinates, byIP bool, wf weather.Forecast, af []air.Forecast) error {
+	callFile := a.CacheFile(SavedCallFileName)
+	if err := os.Remove(callFile); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := SaveWeatherForecast(a.CacheFile(SavedWeatherFileName), wf); err != nil {
+		return err
+	}
+	if err := SaveAirForecast(a.CacheFile(SavedAirFileName), af); err != nil {
+		return err
+	}
+	return UpdateLastCall(c, byIP, callFile)
+}
+
+// UpdateLastCall records when and where forecasts were last fetched.
+// Write it after the forecasts themselves, so it never points at a stale file.
+func UpdateLastCall(c geolocation.Coordinates, byIP bool, path string) error {
+	return SaveCall(path, APICallInfo{Time: time.Now(), Coordinates: c, ByIP: byIP})
 }
 
 // Loads call information to determine whether
@@ -231,24 +269,15 @@ func LoadCallInfo(path string) (APICallInfo, error) {
 	}
 	err = json.Unmarshal(f, &lastCall)
 	if err != nil {
-		fmt.Println("Error unmarshalling last api call.\n", err)
 		return lastCall, err
 	}
 	return lastCall, nil
 }
 
-// Save info for future calls
+// SaveCall saves info for future calls.
+// Call info is public data (coordinates, timestamp), so 0644 is acceptable.
 func SaveCall(path string, info APICallInfo) error {
-	c, err := json.Marshal(info)
-	if err != nil {
-		return err
-	}
-	// Call info is public data (coordinates, timestamp), 0644 is acceptable
-	err = os.WriteFile(path, c, 0644)
-	if err != nil {
-		return err
-	}
-	return nil
+	return saveJSON(path, info, 0644)
 }
 
 // saveJSON marshals data to JSON and saves it to a file.
@@ -258,23 +287,42 @@ func saveJSON(path string, data any, perm os.FileMode) error {
 	if err != nil {
 		return fmt.Errorf("error marshalling data: %w", err)
 	}
-	return os.WriteFile(path, content, perm)
+	return writeFileAtomic(path, content, perm)
 }
 
-func SaveWeatherForecast(path string, f weather.Forecast) bool {
-	err := saveJSON(path, f, 0644)
+// writeFileAtomic replaces path with data in one step: it writes a temp file beside path
+// and renames it into place, so an interrupted write never leaves a truncated file and
+// another vaporwair reading at the same time sees the old file or the new one.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
-		fmt.Println(err)
-		return false
+		return err
 	}
-	return true
+	defer os.Remove(tmp.Name()) // no-op once renamed
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
-func SaveAirForecast(path string, a []air.Forecast) bool {
-	err := saveJSON(path, a, 0644)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	return true
+// SaveWeatherForecast caches a weather forecast.
+func SaveWeatherForecast(path string, f weather.Forecast) error {
+	return saveJSON(path, f, 0644)
+}
+
+// SaveAirForecast caches an air quality forecast.
+func SaveAirForecast(path string, a []air.Forecast) error {
+	return saveJSON(path, a, 0644)
 }
