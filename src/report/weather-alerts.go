@@ -65,9 +65,17 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 // hoursMinutes renders a duration as "9 hours, 48 minutes", or "48 minutes" under an hour.
 func hoursMinutes(d time.Duration) string {
 	hours := int(d.Hours())
-	minutes := int(d.Minutes()) % 60
+	minutes := plural(int(d.Minutes())%60, "minute")
 	if hours > 0 {
-		return fmt.Sprintf("%d hours, %d minutes", hours, minutes)
+		return plural(hours, "hour") + ", " + minutes
 	}
-	return fmt.Sprintf("%d minutes", minutes)
+	return minutes
+}
+
+// plural formats a count with its unit, e.g. "1 hour", "48 minutes".
+func plural(n int, unit string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, unit)
+	}
+	return fmt.Sprintf("%d %ss", n, unit)
 }

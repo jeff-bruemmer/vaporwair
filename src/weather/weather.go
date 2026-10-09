@@ -3,10 +3,12 @@
 package weather
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jeff-bruemmer/vaporwair/src/dialer"
@@ -67,7 +69,9 @@ type Forecast struct {
 
 // NOAA API constants
 const NOAABaseURL = "https://api.weather.gov"
-const NOAAUserAgent = "vaporwair/2.0 (https://github.com/jeff-bruemmer/vaporwair)"
+
+// noaaTimeout bounds each NOAA request.
+const noaaTimeout = 10 * time.Second
 
 // NOAA Alerts API structures
 type NOAAAlertResponse struct {
@@ -248,9 +252,9 @@ func GetNOAAGridPoint(c geolocation.Coordinates) (NOAAPointsResponse, error) {
 	var points NOAAPointsResponse
 	url := fmt.Sprintf("%s/points/%s,%s", NOAABaseURL, c.Latitude, c.Longitude)
 
-	resp, err := dialer.NetReqWithUserAgent(url, 10, false, NOAAUserAgent)
+	resp, err := dialer.Get(url, noaaTimeout)
 	if err != nil {
-		return points, fmt.Errorf("failed to connect to NOAA weather service at %s: %w", url, err)
+		return points, err
 	}
 	defer resp.Body.Close()
 
@@ -277,9 +281,9 @@ func GetNOAAGridPoint(c geolocation.Coordinates) (NOAAPointsResponse, error) {
 func GetNOAAForecast(forecastURL string) (NOAAForecastResponse, error) {
 	var forecast NOAAForecastResponse
 
-	resp, err := dialer.NetReqWithUserAgent(forecastURL, 10, false, NOAAUserAgent)
+	resp, err := dialer.Get(forecastURL, noaaTimeout)
 	if err != nil {
-		return forecast, fmt.Errorf("failed to retrieve forecast from NOAA: %w", err)
+		return forecast, err
 	}
 	defer resp.Body.Close()
 
@@ -597,7 +601,7 @@ func mapNOAAIconToIcon(shortForecast string) string {
 func GetNOAAAlerts(c geolocation.Coordinates) ([]Alert, error) {
 	url := fmt.Sprintf("%s/alerts/active?point=%s,%s", NOAABaseURL, c.Latitude, c.Longitude)
 
-	resp, err := dialer.NetReqWithUserAgent(url, 10, false, NOAAUserAgent)
+	resp, err := dialer.Get(url, noaaTimeout)
 	if err != nil {
 		// Alerts are optional - don't fail if unavailable
 		return []Alert{}, nil
@@ -646,7 +650,7 @@ func GetNOAAObservation(stationsURL string) (NOAAObservationProperties, error) {
 	var obsProps NOAAObservationProperties
 
 	// First, get list of observation stations
-	resp, err := dialer.NetReqWithUserAgent(stationsURL, 10, false, NOAAUserAgent)
+	resp, err := dialer.Get(stationsURL, noaaTimeout)
 	if err != nil {
 		return obsProps, err
 	}
@@ -670,7 +674,7 @@ func GetNOAAObservation(stationsURL string) (NOAAObservationProperties, error) {
 	stationID := stations.Features[0].Properties.StationIdentifier
 	obsURL := fmt.Sprintf("%s/stations/%s/observations/latest", NOAABaseURL, stationID)
 
-	resp, err = dialer.NetReqWithUserAgent(obsURL, 10, false, NOAAUserAgent)
+	resp, err = dialer.Get(obsURL, noaaTimeout)
 	if err != nil {
 		return obsProps, err
 	}
@@ -697,25 +701,38 @@ func GetNOAAWeatherForecast(c geolocation.Coordinates) (Forecast, error) {
 		return Forecast{}, err
 	}
 
-	// Step 2: Get daily forecast
-	dailyForecast, err := GetNOAAForecast(points.Properties.Forecast)
-	if err != nil {
+	// Steps 2-5 only need the grid point, so they run at once.
+	var (
+		wg                            sync.WaitGroup
+		dailyForecast, hourlyForecast NOAAForecastResponse
+		dailyErr, hourlyErr           error
+		alerts                        []Alert
+		observation                   NOAAObservationProperties
+	)
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		dailyForecast, dailyErr = GetNOAAForecast(points.Properties.Forecast)
+	}()
+	go func() {
+		defer wg.Done()
+		hourlyForecast, hourlyErr = GetNOAAForecast(points.Properties.ForecastHourly)
+	}()
+	go func() {
+		// Alerts are optional - don't fail if unavailable
+		defer wg.Done()
+		alerts, _ = GetNOAAAlerts(c)
+	}()
+	go func() {
+		// Observation data for pressure and visibility is optional
+		defer wg.Done()
+		if points.Properties.ObservationStations != "" {
+			observation, _ = GetNOAAObservation(points.Properties.ObservationStations)
+		}
+	}()
+	wg.Wait()
+	if err := cmp.Or(dailyErr, hourlyErr); err != nil {
 		return Forecast{}, err
-	}
-
-	// Step 3: Get hourly forecast
-	hourlyForecast, err := GetNOAAForecast(points.Properties.ForecastHourly)
-	if err != nil {
-		return Forecast{}, err
-	}
-
-	// Step 4: Get weather alerts (optional - don't fail if unavailable)
-	alerts, _ := GetNOAAAlerts(c)
-
-	// Step 5: Get observation data for pressure and visibility (optional)
-	var observation NOAAObservationProperties
-	if points.Properties.ObservationStations != "" {
-		observation, _ = GetNOAAObservation(points.Properties.ObservationStations)
 	}
 
 	// Step 6: Convert to our Forecast structure

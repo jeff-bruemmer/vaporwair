@@ -2,77 +2,64 @@
 package dialer
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 )
 
-// isTimeoutError checks if the error is a timeout error
-func isTimeoutError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := err.Error()
-	return errMsg != "" && (strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "Timeout"))
-}
+// UserAgent is sent with every request. NOAA requires one that identifies the app;
+// main adds the version.
+var UserAgent = "vaporwair (https://github.com/jeff-bruemmer/vaporwair)"
 
-// NetReq returns an *http.Response, or times out after a specified duration.
-func NetReq(url string, s time.Duration, gzip bool) (*http.Response, error) {
-	headers := make(map[string]string)
-	if gzip {
-		headers["Accept-Encoding"] = "gzip"
-	}
-
-	client := &http.Client{Timeout: s * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
+// Get sends a GET request that gives up after timeout.
+// A failed request returns an error that names the host but never the URL,
+// since URLs can carry API keys.
+func Get(rawURL string, timeout time.Duration) (*http.Response, error) {
+	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+		return nil, fmt.Errorf("bad request URL: %w", stripURL(err))
 	}
+	req.Header.Set("User-Agent", UserAgent)
 
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{Timeout: timeout}).Do(req)
 	if err != nil {
-		if isTimeoutError(err) {
-			return nil, fmt.Errorf("request timed out after %v: %w", s*time.Second, err)
-		}
-		return nil, fmt.Errorf("network request failed: %w", err)
+		return nil, describe(req.URL.Host, timeout, stripURL(err))
 	}
-
 	return resp, nil
 }
 
-// NetReqWithUserAgent returns an *http.Response with a custom User-Agent header,
-// or times out after a specified duration.
-func NetReqWithUserAgent(url string, s time.Duration, gzip bool, userAgent string) (*http.Response, error) {
-	headers := make(map[string]string)
-	if userAgent != "" {
-		headers["User-Agent"] = userAgent
+// stripURL drops the URL that net/http puts in its errors.
+func stripURL(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		return uerr.Err
 	}
-	if gzip {
-		headers["Accept-Encoding"] = "gzip"
-	}
+	return err
+}
 
-	client := &http.Client{Timeout: s * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
+// requestError is a network failure described for a person. It still unwraps to the
+// underlying error, whose low-level text ("lookup ...: no such host") it leaves out.
+type requestError struct {
+	msg string
+	err error
+}
 
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
+func (e *requestError) Error() string { return e.msg }
+func (e *requestError) Unwrap() error { return e.err }
 
-	resp, err := client.Do(req)
-	if err != nil {
-		if isTimeoutError(err) {
-			return nil, fmt.Errorf("request timed out after %v: %w", s*time.Second, err)
-		}
-		return nil, fmt.Errorf("network request failed: %w", err)
+// describe rewrites a network failure as something a person can act on.
+func describe(host string, timeout time.Duration, err error) error {
+	var dnsErr *net.DNSError
+	var netErr net.Error
+	switch {
+	case errors.As(err, &dnsErr):
+		return &requestError{fmt.Sprintf("can't reach %s (no network connection?)", host), err}
+	case errors.As(err, &netErr) && netErr.Timeout():
+		return &requestError{fmt.Sprintf("%s did not respond within %v", host, timeout), err}
+	default:
+		return &requestError{fmt.Sprintf("can't connect to %s: %v", host, err), err}
 	}
-
-	return resp, nil
 }

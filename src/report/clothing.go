@@ -14,7 +14,7 @@ import (
 type ClothingRecommendation struct {
 	Outfit      string
 	Accessories []string
-	Notes       []string // most important first
+	Notes       []Note // most important first
 	// Coldest is the lowest feels-like temperature between now and Until, at ColdestAt
 	// (zero when only daily data was available); the outfit is chosen for it, since that
 	// is the part of the day you must dress for.
@@ -40,9 +40,11 @@ const (
 	notePriorityComfort
 )
 
-type note struct {
-	priority int
-	text     string
+// Note is one tip. The clothing report gives precipitation tips their own section,
+// so it tells them apart by Priority.
+type Note struct {
+	Priority int
+	Text     string
 }
 
 // getBaseOutfit returns clothing recommendations based on temperature.
@@ -62,9 +64,8 @@ func getBaseOutfit(temp float64) string {
 // window of hours (now until Until), so the advice is consistent.
 func GetClothingRecommendation(f weather.Forecast, a []air.Forecast) ClothingRecommendation {
 	var rec ClothingRecommendation
-	var notes []note
 	addNote := func(priority int, format string, args ...any) {
-		notes = append(notes, note{priority, fmt.Sprintf(format, args...)})
+		rec.Notes = append(rec.Notes, Note{priority, fmt.Sprintf(format, args...)})
 	}
 
 	rec.Until = clothingWindowEnd(clock())
@@ -146,11 +147,7 @@ func GetClothingRecommendation(f weather.Forecast, a []air.Forecast) ClothingRec
 		}
 	}
 
-	sort.SliceStable(notes, func(i, j int) bool { return notes[i].priority < notes[j].priority })
-	rec.Notes = make([]string, len(notes))
-	for i, n := range notes {
-		rec.Notes[i] = n.text
-	}
+	sort.SliceStable(rec.Notes, func(i, j int) bool { return rec.Notes[i].Priority < rec.Notes[j].Priority })
 	return rec
 }
 
@@ -209,7 +206,7 @@ func ClothingSummary(w weather.Forecast, a []air.Forecast) {
 
 	// Show most important tip (first one)
 	if len(rec.Notes) > 0 {
-		fmt.Fprintf(TW, "Tip:\t%s\n", rec.Notes[0])
+		fmt.Fprintf(TW, "Tip:\t%s\n", rec.Notes[0].Text)
 	}
 
 	// Point to the full report when there's more than fits here
@@ -296,8 +293,8 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	// Other tips (precipitation tips are covered in their own section below)
 	var tips []string
 	for _, note := range rec.Notes {
-		if !IsPrecipitationNote(note) {
-			tips = append(tips, note)
+		if note.Priority != notePriorityPrecip {
+			tips = append(tips, note.Text)
 		}
 	}
 	if len(tips) > 0 {

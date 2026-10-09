@@ -67,21 +67,6 @@ func GetPrecipTypeOrDefault(precipType string) string {
 	return "Precipitation"
 }
 
-// IsPrecipitationNote checks if a note string contains precipitation-related keywords.
-// This is used to filter out precipitation-related notes when they're displayed elsewhere.
-func IsPrecipitationNote(note string) bool {
-	lowerNote := strings.ToLower(note)
-	precipKeywords := []string{"precipitation", "rain", "snow", "umbrella", "sleet"}
-
-	for _, keyword := range precipKeywords {
-		if strings.Contains(lowerNote, keyword) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // FormatTemperatureString returns a temperature string with "feels like" if the difference exceeds threshold.
 // Uses FeelsLikeDiffThreshold (3°F) to determine when to show the "feels like" temperature.
 func FormatTemperatureString(actual, feelsLike float64, unit string) string {
@@ -378,4 +363,37 @@ func upcomingHours(data []weather.DataPoint) []weather.DataPoint {
 		}
 	}
 	return nil
+}
+
+// DropPast removes what a forecast has outlived by now: expired alerts, daily periods that
+// have ended, and air forecasts for earlier days. A cache shown offline can be a day old.
+// It never writes to the slices it is given, since the caller saves them afterwards.
+func DropPast(w weather.Forecast, a []air.Forecast, now time.Time) (weather.Forecast, []air.Forecast) {
+	// A period has ended once the next one has started. The last is kept, so Data[0] exists.
+	for len(w.Daily.Data) > 1 && w.Daily.Data[1].Time <= float64(now.Unix()) {
+		w.Daily.Data = w.Daily.Data[1:]
+	}
+
+	var alerts []weather.Alert
+	for _, alert := range w.Alerts {
+		if alert.Expires == 0 || alert.Expires > float64(now.Unix()) {
+			alerts = append(alerts, alert)
+		}
+	}
+	w.Alerts = alerts
+
+	// AirNow dates are the location's, so "today" is too. LoadLocation("") would mean UTC.
+	if w.Timezone != "" {
+		if loc, err := time.LoadLocation(w.Timezone); err == nil {
+			now = now.In(loc)
+		}
+	}
+	today := now.Format("2006-01-02")
+	var current []air.Forecast
+	for _, f := range a {
+		if strings.TrimSpace(f.DateForecast) >= today {
+			current = append(current, f)
+		}
+	}
+	return w, current
 }

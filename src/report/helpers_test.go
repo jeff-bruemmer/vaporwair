@@ -147,35 +147,6 @@ func TestGetPrecipTypeOrDefault(t *testing.T) {
 	}
 }
 
-// TestIsPrecipitationNote tests precipitation keyword detection
-func TestIsPrecipitationNote(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  bool
-	}{
-		{"umbrella mention", "Bring an umbrella", true},
-		{"precipitation keyword", "Watch for precipitation", true},
-		{"rain keyword", "Rain expected later", true},
-		{"snow keyword", "Snow possible overnight", true},
-		{"sleet keyword", "Sleet and ice", true},
-		{"sunny weather", "It's sunny", false},
-		{"empty string", "", false},
-		{"wind only", "Strong winds expected", false},
-		{"mixed case rain", "RAIN warning", true},
-		{"mixed case umbrella", "UMBRELLA recommended", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := IsPrecipitationNote(tt.input)
-			if got != tt.want {
-				t.Errorf("IsPrecipitationNote(%q) = %v, want %v", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestParseNWSDescription tests splitting NWS alert text into labeled sections
 func TestParseNWSDescription(t *testing.T) {
 	desc := "* WHAT...Temperatures as low as 33 will result in frost\nformation.\n\n* WHERE...The Champlain Valley.\n\n* WHEN...From midnight tonight to 7 AM EDT Wednesday.\n\n* ADDITIONAL DETAILS...Cover plants."

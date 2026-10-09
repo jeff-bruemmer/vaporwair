@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/jeff-bruemmer/vaporwair/src/air"
 	"github.com/jeff-bruemmer/vaporwair/src/weather"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -46,7 +48,7 @@ const MaxReportWidth = 80
 var ReportWidth = min(GetTerminalWidth(), MaxReportWidth)
 
 // Format string for tabwriter label/value rows
-var formatString = "%s:\t%s\n" // e.g., "Currently: Mostly Cloudy"
+const formatString = "%s:\t%s\n" // e.g., "Currently: Mostly Cloudy"
 
 // winsize struct for terminal size detection
 type winsize struct {
@@ -56,8 +58,8 @@ type winsize struct {
 	Ypixel uint16
 }
 
-// GetTerminalWidth detects the current terminal width.
-// Falls back to 80 columns if detection fails.
+// GetTerminalWidth detects the current terminal width. When stdout isn't a terminal
+// (output is piped), it uses $COLUMNS if set, else 80 columns.
 func GetTerminalWidth() int {
 	ws := &winsize{}
 	retCode, _, _ := syscall.Syscall(syscall.SYS_IOCTL,
@@ -65,12 +67,13 @@ func GetTerminalWidth() int {
 		uintptr(syscall.TIOCGWINSZ),
 		uintptr(unsafe.Pointer(ws)))
 
-	if int(retCode) == -1 || ws.Col == 0 {
-		// Fallback to 80 columns if detection fails (e.g. output is piped)
-		return 80
+	if int(retCode) != -1 && ws.Col != 0 {
+		return int(ws.Col)
 	}
-
-	return int(ws.Col)
+	if cols, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && cols > 0 {
+		return cols
+	}
+	return 80
 }
 
 // Title returns a bold section heading padded with "=" to ReportWidth.
@@ -100,6 +103,11 @@ func AddPeriod(s string) string {
 // Converts decimal to percent
 func ToPercent(f float64) float64 {
 	return f * 100
+}
+
+// Round rounds a float64 to the nearest integer value
+func Round(v float64) float64 {
+	return math.Round(v)
 }
 
 // Formats time

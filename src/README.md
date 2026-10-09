@@ -6,11 +6,11 @@ Contains the data structures and utilities for retrieving forecasts from the Air
 
 ## dialer
 
-Handles calls for all API requests.
+Sends every API request, with a timeout, and rewrites network failures for people (naming the host, never the URL, which can carry an API key).
 
 ## geolocation
 
-Handles data from ipwho.is requests, which uses IP addresses to obtain geolocation coordinates.
+Finds coordinates from an IP address (ipwho.is) or a US zip code (api.zippopotam.us), and validates zip codes.
 
 ## report
 
@@ -18,7 +18,7 @@ Formats data from API calls into specific reports for display in terminal.
 
 ## storage
 
-Contains OS utilities for storing and retrieving payloads from API calls.
+Reads and writes the config file and the forecast cache, in the XDG config and cache directories. Every write is atomic.
 
 ## weather
 

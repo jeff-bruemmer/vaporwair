@@ -1,6 +1,7 @@
 package report
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,15 @@ func withClock(t *testing.T, now time.Time) {
 	old := clock
 	clock = func() time.Time { return now }
 	t.Cleanup(func() { clock = old })
+}
+
+// noteTexts returns a recommendation's notes as text, in order.
+func noteTexts(rec ClothingRecommendation) []string {
+	texts := make([]string, len(rec.Notes))
+	for i, n := range rec.Notes {
+		texts[i] = n.Text
+	}
+	return texts
 }
 
 // eveningForecast is a clear autumn evening at 19:11 that cools from 51F to a pre-dawn
@@ -90,8 +100,8 @@ func TestLayeringTipNamesColdestHour(t *testing.T) {
 	w.Daily.Data[0].PeriodName = "Today"
 	rec := GetClothingRecommendation(w, nil)
 	want := "feels like 30F at 18:00"
-	if len(rec.Notes) == 0 || !strings.Contains(strings.Join(rec.Notes, "|"), want) {
-		t.Errorf("notes %q missing %q", rec.Notes, want)
+	if notes := noteTexts(rec); !strings.Contains(strings.Join(notes, "|"), want) {
+		t.Errorf("notes %q missing %q", notes, want)
 	}
 }
 
@@ -106,8 +116,8 @@ func TestAirQualityNoteComesFirst(t *testing.T) {
 	}
 	a := []air.Forecast{{DateForecast: "2026-10-06", ParameterName: "PM2.5", AQI: 155, Category: air.Category{Name: "Unhealthy"}}}
 	rec := GetClothingRecommendation(w, a)
-	if len(rec.Notes) < 3 || !strings.HasPrefix(rec.Notes[0], "Unhealthy air (PM2.5)") {
-		t.Errorf("first note should be the air quality warning, got %q", rec.Notes)
+	if len(rec.Notes) < 3 || !strings.HasPrefix(rec.Notes[0].Text, "Unhealthy air (PM2.5)") {
+		t.Errorf("first note should be the air quality warning, got %q", noteTexts(rec))
 	}
 	for _, acc := range rec.Accessories {
 		if strings.Contains(strings.ToLower(acc), "mask") {
@@ -120,7 +130,7 @@ func TestAirQualityNoteComesFirst(t *testing.T) {
 func TestNoDoubleCountedFeelsLikeTips(t *testing.T) {
 	w, a := fixtureForecast()
 	rec := GetClothingRecommendation(w, a)
-	for _, n := range rec.Notes {
+	for _, n := range noteTexts(rec) {
 		lower := strings.ToLower(n)
 		if strings.Contains(lower, "wind chill") || strings.Contains(lower, "feels warmer") {
 			t.Errorf("note double-counts feels-like: %q", n)
@@ -257,5 +267,92 @@ func TestClothingPrecipMatchesWindow(t *testing.T) {
 	out := capture(t, func() { ClothingReport(w, nil) })
 	if !strings.Contains(out, "Umbrella") || !strings.Contains(out, "80% chance of rain") || strings.Contains(out, "No precipitation expected") {
 		t.Errorf("umbrella advice without the rain that explains it:\n%s", out)
+	}
+}
+
+// A precipitation chance shows once, in its own section, whatever NOAA calls the type.
+func TestClothingPrecipTipNotRepeated(t *testing.T) {
+	withClock(t, at(14, 0))
+	w := eveningForecast()
+	base := at(14, 0)
+	for i := range w.Hourly.Data {
+		w.Hourly.Data[i].Time = float64(base.Add(time.Duration(i) * time.Hour).Unix())
+		w.Hourly.Data[i].PrecipProbability, w.Hourly.Data[i].PrecipType = 0.75, "mix"
+	}
+	w.Daily.Data[0].PeriodName = "This Afternoon"
+	out := capture(t, func() { ClothingReport(w, nil) })
+	if n := strings.Count(out, "75% chance of mix"); n != 1 {
+		t.Errorf("precipitation chance appears %d times, want once:\n%s", n, out)
+	}
+}
+
+func TestHoursMinutes(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		time.Minute:                  "1 minute",
+		48 * time.Minute:             "48 minutes",
+		time.Hour:                    "1 hour, 0 minutes",
+		2*time.Hour + time.Minute:    "2 hours, 1 minute",
+		4*time.Hour + 49*time.Minute: "4 hours, 49 minutes",
+	} {
+		if got := hoursMinutes(d); got != want {
+			t.Errorf("hoursMinutes(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
+
+// A saved forecast shown later drops what has passed, and leaves the saved slices alone.
+func TestDropPast(t *testing.T) {
+	now := at(14, 0)
+	hour := func(h int) float64 { return float64(now.Add(time.Duration(h) * time.Hour).Unix()) }
+	var w weather.Forecast
+	w.Daily.Data = []weather.DataPoint{
+		{Time: hour(-20), PeriodName: "Tonight"}, // last night, over once Today began
+		{Time: hour(-8), PeriodName: "Today"},
+		{Time: hour(4), PeriodName: "Tonight"},
+	}
+	w.Alerts = []weather.Alert{
+		{Title: "Frost Advisory", Expires: hour(-9)},
+		{Title: "Wind Advisory", Expires: hour(2)},
+		{Title: "Flood Watch"}, // no expiry given
+	}
+	a := []air.Forecast{
+		{DateForecast: "2026-10-05 ", ParameterName: "OZONE"},
+		{DateForecast: "2026-10-06 ", ParameterName: "OZONE"},
+		{DateForecast: "2026-10-07 ", ParameterName: "OZONE"},
+	}
+	daily, alerts, airRows := slices.Clone(w.Daily.Data), slices.Clone(w.Alerts), slices.Clone(a)
+
+	gotW, gotA := DropPast(w, a, now)
+	if len(gotW.Daily.Data) != 2 || gotW.Daily.Data[0].PeriodName != "Today" {
+		t.Errorf("daily = %+v, want Today first", gotW.Daily.Data)
+	}
+	if len(gotW.Alerts) != 2 || gotW.Alerts[0].Title != "Wind Advisory" {
+		t.Errorf("alerts = %+v, want the wind advisory and flood watch", gotW.Alerts)
+	}
+	if len(gotA) != 2 || strings.TrimSpace(gotA[0].DateForecast) != "2026-10-06" {
+		t.Errorf("air = %+v, want today onward", gotA)
+	}
+	if !slices.Equal(w.Daily.Data, daily) || !slices.Equal(w.Alerts, alerts) || !slices.Equal(a, airRows) {
+		t.Error("DropPast modified its input slices, which main saves to the cache")
+	}
+
+	// Every period over: the last is kept, since reports read Daily.Data[0].
+	w.Daily.Data = w.Daily.Data[:2]
+	if gotW, _ := DropPast(w, nil, now.Add(24*time.Hour)); len(gotW.Daily.Data) != 1 {
+		t.Errorf("all periods past: got %d, want the last one kept", len(gotW.Daily.Data))
+	}
+}
+
+// AirNow dates are the location's: 01:00 in New York is still yesterday in Los Angeles.
+func TestDropPastUsesForecastTimezone(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("no tz database:", err)
+	}
+	now := time.Date(2026, time.October, 7, 1, 0, 0, 0, ny)
+	w := weather.Forecast{Timezone: "America/Los_Angeles"}
+	a := []air.Forecast{{DateForecast: "2026-10-06", ParameterName: "OZONE"}}
+	if _, got := DropPast(w, a, now); len(got) != 1 {
+		t.Errorf("dropped Los Angeles's current day: %+v", got)
 	}
 }

@@ -23,7 +23,7 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 	rec := GetClothingRecommendation(w, a)
 	fmt.Fprintf(TW, formatString, "Outfit", rec.Outfit)
 	if len(rec.Notes) > 0 {
-		fmt.Fprintf(TW, formatString, "Tip", rec.Notes[0])
+		fmt.Fprintf(TW, formatString, "Tip", rec.Notes[0].Text)
 	}
 
 	aqi, ok := airQualityLine(a)
