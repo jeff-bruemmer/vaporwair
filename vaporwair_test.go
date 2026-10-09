@@ -229,6 +229,10 @@ func TestSelectReportErrorHints(t *testing.T) {
 		"-zip=ip":         "-default=ip",
 		"-zip=05401-1234": "use the 5-digit form",
 		"weekly":          `did you mean "week"?`,
+		"-s":              "vaporwair summary",
+		"-alerts":         "vaporwair alerts",
+		"--w":             "vaporwair week",
+		"-c=true":         "vaporwair clothing",
 	}
 	for arg, want := range cases {
 		setFlags(t, "", false, false)

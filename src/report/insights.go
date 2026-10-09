@@ -42,13 +42,11 @@ func futureHours(w weather.Forecast, n int) []weather.DataPoint {
 
 // InsightsReport provides today's forecast, what to wear, and next few hours.
 func InsightsReport(w weather.Forecast, a []air.Forecast) {
-	// Show weather alerts first if any exist
 	WeatherAlerts(w)
 
 	conditionsSection(TW, w, a)
 	TW.Flush()
 
-	// What to Wair
 	fmt.Println()
 	ClothingSummary(w, a)
 

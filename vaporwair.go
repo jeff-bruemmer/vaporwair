@@ -313,7 +313,6 @@ func printUsage(w io.Writer, fs *flag.FlagSet) {
 }
 
 // setupConfiguration initializes the configuration directory and loads API keys.
-// Returns the application configuration or an error if setup fails.
 func setupConfiguration() (storage.AppConfig, error) {
 	appConfig, err := storage.InitializeAppConfig()
 	if err != nil {
@@ -338,7 +337,6 @@ func setupConfiguration() (storage.AppConfig, error) {
 }
 
 // fetchForecasts retrieves weather and air quality forecasts for given coordinates.
-// Returns weather forecast and air quality forecast.
 func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weather.Forecast, []air.Forecast, error) {
 	type airResult struct {
 		forecast []air.Forecast
@@ -348,7 +346,6 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 	airChan := make(chan airResult, 1)
 	errChan := make(chan error, 2)
 
-	// Fetch weather forecast
 	go func() {
 		forecast, err := weather.GetNOAAWeatherForecast(coords)
 		if err != nil {
@@ -358,7 +355,6 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 		weatherChan <- forecast
 	}()
 
-	// Fetch air quality forecast
 	go func() {
 		if config.AirNowAPIKey != "" && coords.Zip != "" {
 			anURL := air.BuildAirNowURL(air.AirNowAddress, coords.Zip, config.AirNowAPIKey)
@@ -373,7 +369,6 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 		}
 	}()
 
-	// Wait for results with timeout
 	select {
 	case err := <-errChan:
 		return weather.Forecast{}, nil, err
@@ -531,7 +526,7 @@ func saveDefaultZip(configFile, saved string) {
 // flag.ErrHelp, like -help.
 func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 	if err := fs.Parse(args); err != nil {
-		return reportSpec{}, err
+		return reportSpec{}, reportFlagHint(args, err)
 	}
 	spec := reports[0]
 	if fs.NArg() > 0 {
@@ -548,13 +543,42 @@ func selectReport(fs *flag.FlagSet, args []string) (reportSpec, error) {
 		}
 		spec = reports[i]
 		if err := fs.Parse(fs.Args()[1:]); err != nil {
-			return reportSpec{}, err
+			return reportSpec{}, reportFlagHint(args, err)
 		}
 		if fs.NArg() > 0 {
 			return reportSpec{}, fmt.Errorf("choose one report; unexpected argument %q", fs.Arg(0))
 		}
 	}
 	return spec, checkLocationFlags(fs)
+}
+
+// reportFlags maps report-like flags (-s, -w, -alerts) to the report of that name. Reports
+// are chosen by name, so these are not options; -h is help.
+var reportFlags = map[string]string{
+	"d": "daily", "w": "week", "a": "air", "c": "clothing",
+	"i": "insights", "s": "summary", "alerts": "alerts",
+}
+
+// reportFlagHint turns a parse error caused by a report-like flag in args into one that
+// names the report to run instead. Any other error, and -help, is returned unchanged.
+func reportFlagHint(args []string, err error) error {
+	if errors.Is(err, flag.ErrHelp) {
+		return err
+	}
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		name, ok := strings.CutPrefix(arg, "-")
+		if !ok {
+			continue
+		}
+		name, _, _ = strings.Cut(strings.TrimPrefix(name, "-"), "=")
+		if r, ok := reportFlags[name]; ok {
+			return fmt.Errorf("-%s is not an option; reports are chosen by name: vaporwair %s", name, r)
+		}
+	}
+	return err
 }
 
 // checkLocationFlags validates -zip and -default before anything is fetched or saved.
@@ -692,6 +716,7 @@ func main() {
 			notes = append(notes, fmt.Sprintf("Showing the last saved forecast: %v", err))
 			locatedByIP = pc.ByIP
 			render(t, pc.Coordinates, pc.Time, true, wf, af)
+			saveDefaultZip(appConfig.ConfigFile(), savedDefault)
 			return
 		}
 		fatal(err)

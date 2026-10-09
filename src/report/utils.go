@@ -45,7 +45,6 @@ func CapitalizeFirst(s string) string {
 		return s
 	}
 
-	// Handle special case for mixed precipitation
 	if s == "rain/snow" {
 		return "Rain/Snow"
 	}
@@ -149,19 +148,15 @@ func WrapText(text string, width int) []string {
 // FormatWindString formats wind speed and direction with optional gust information.
 // If withFrom is true, uses "from {direction}" format, otherwise uses "{direction}" format.
 func FormatWindString(speed, bearing, gust float64, unit string, withFrom bool) string {
-	cardinalDir := DegreesToCardinal(bearing)
-
+	dir := DegreesToCardinal(bearing)
 	if withFrom {
-		if gust > 0 {
-			return fmt.Sprintf("%.0f %s from %s (gusts %.0f)", speed, unit, cardinalDir, gust)
-		}
-		return fmt.Sprintf("%.0f %s from %s", speed, unit, cardinalDir)
+		dir = "from " + dir
 	}
-
+	s := fmt.Sprintf("%.0f %s %s", speed, unit, dir)
 	if gust > 0 {
-		return fmt.Sprintf("%.0f %s %s (gusts %.0f)", speed, unit, cardinalDir, gust)
+		s += fmt.Sprintf(" (gusts %.0f)", gust)
 	}
-	return fmt.Sprintf("%.0f %s %s", speed, unit, cardinalDir)
+	return s
 }
 
 // DegreesToCardinal converts wind bearing in degrees to cardinal direction.

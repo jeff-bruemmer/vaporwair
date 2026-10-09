@@ -8,31 +8,24 @@ import (
 	"testing"
 )
 
-// HTTPS Protocol Validation
-// This test will FAIL with current code (http) and PASS after fix (https)
-func TestIPAPIUsesHTTPS(t *testing.T) {
-	// PRIMARY test for security requirement
-	if !strings.HasPrefix(IPAPIAddress, "https://") {
-		t.Errorf("IP-API must use HTTPS for security, got: %s", IPAPIAddress)
-		t.Error("HTTP connections are vulnerable to MITM attacks that could leak location data")
+// Location lookups must use HTTPS, so nothing on the network can read or change them.
+func TestAPIsUseHTTPS(t *testing.T) {
+	for _, addr := range []string{IPAPIAddress, ZipCodeAPIAddress} {
+		if !strings.HasPrefix(addr, "https://") {
+			t.Errorf("%s must use HTTPS", addr)
+		}
 	}
 }
 
 // GetGeoData Integration with Mock Server
 // Validates full flow with HTTP(S) works correctly
 func TestGetGeoDataWithMockServer(t *testing.T) {
-	// Create mock HTTP server (note: httptest uses HTTP, but we test the data flow)
 	sampleResponse := ipWhoResponse{
-		Success:     true,
-		IP:          "192.168.1.1",
-		Country:     "United States",
-		CountryCode: "US",
-		Region:      "California",
-		RegionCode:  "CA",
-		City:        "Los Angeles",
-		Postal:      "90001",
-		Latitude:    34.0522,
-		Longitude:   -118.2437,
+		Success:   true,
+		City:      "Los Angeles",
+		Postal:    "90001",
+		Latitude:  34.0522,
+		Longitude: -118.2437,
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,16 +34,11 @@ func TestGetGeoDataWithMockServer(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Test: Call GetGeoData with mock URL
 	geoData, err := GetGeoData(server.URL)
 	if err != nil {
 		t.Fatalf("GetGeoData failed: %v", err)
 	}
 
-	// Verify: All fields populated correctly
-	if geoData.Status != "success" {
-		t.Errorf("Status mismatch: got %s, want success", geoData.Status)
-	}
 	if geoData.City != "Los Angeles" {
 		t.Errorf("City mismatch: got %s, want Los Angeles", geoData.City)
 	}
@@ -62,9 +50,6 @@ func TestGetGeoDataWithMockServer(t *testing.T) {
 	}
 	if geoData.Zip != "90001" {
 		t.Errorf("Zip mismatch: got %s, want 90001", geoData.Zip)
-	}
-	if geoData.Region != "CA" || geoData.RegionName != "California" {
-		t.Errorf("Region mismatch: got %s/%s, want CA/California", geoData.Region, geoData.RegionName)
 	}
 }
 
@@ -166,48 +151,6 @@ func TestGetGeoDataFromZip(t *testing.T) {
 	}
 }
 
-// GetGeoDataFromZip Success Case
-func TestGetGeoDataFromZipSuccess(t *testing.T) {
-	// Sample zippopotam.us response
-	sampleZipResponse := ZipCodeResponse{
-		PostCode:    "10001",
-		Country:     "United States",
-		CountryAbbr: "US",
-		Places: []struct {
-			PlaceName string `json:"place name"`
-			Longitude string `json:"longitude"`
-			State     string `json:"state"`
-			StateAbbr string `json:"state abbreviation"`
-			Latitude  string `json:"latitude"`
-		}{
-			{
-				PlaceName: "New York City",
-				Longitude: "-73.9967",
-				State:     "New York",
-				StateAbbr: "NY",
-				Latitude:  "40.7484",
-			},
-		},
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request path includes zip code
-		if !strings.Contains(r.URL.Path, "10001") {
-			t.Errorf("Expected path to contain zip code 10001, got: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(sampleZipResponse)
-	}))
-	defer server.Close()
-
-	// Override the API address for testing
-	// Note: In real implementation, we'd inject this dependency
-	// For now, we test with the mock server by not using the const
-
-	// Test valid zip code (will hit real API - skip in unit tests)
-	t.Skip("Skipping live API test - requires network access and may fail if API is down")
-}
-
 // GetGeoDataFromZip 404 Handling
 func TestGetGeoDataFromZip404(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -296,35 +239,6 @@ func TestFormatCoordinates(t *testing.T) {
 	}
 }
 
-// Backward Compatibility - Cached Coordinates
-// Ensures cached location data still works
-func TestBackwardCompatibilityCachedCoordinates(t *testing.T) {
-	// Simulate coordinates that might be in cache from old format
-	oldCoords := GeoData{
-		Status:  "success",
-		Lat:     40.7128,
-		Lon:     -74.0060,
-		City:    "New York",
-		Zip:     "10001",
-		Country: "United States",
-	}
-
-	// Test: FormatCoordinates processes them
-	result := FormatCoordinates(oldCoords)
-
-	// Verify: Output format unchanged
-	if result.City != "New York" {
-		t.Errorf("City format changed: got %s, want New York", result.City)
-	}
-	if result.Zip != "10001" {
-		t.Errorf("Zip format changed: got %s, want 10001", result.Zip)
-	}
-	if result.Latitude == "" || result.Longitude == "" {
-		t.Error("Coordinate formatting broke backward compatibility")
-	}
-}
-
-// Test: trimCoordinates function
 func TestTrimCoordinates(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -360,38 +274,5 @@ func TestTrimCoordinates(t *testing.T) {
 				t.Errorf("trimCoordinates(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
-	}
-}
-
-// Test: ZipCode API address uses HTTPS
-func TestZipCodeAPIUsesHTTPS(t *testing.T) {
-	if !strings.HasPrefix(ZipCodeAPIAddress, "https://") {
-		t.Errorf("ZipCode API must use HTTPS, got: %s", ZipCodeAPIAddress)
-	}
-}
-
-// Integration test: Test the constants are properly set
-func TestAPIConstants(t *testing.T) {
-	// Verify IP-API address is not empty
-	if IPAPIAddress == "" {
-		t.Error("IPAPIAddress should not be empty")
-	}
-
-	// Verify ZipCode API address is not empty
-	if ZipCodeAPIAddress == "" {
-		t.Error("ZipCodeAPIAddress should not be empty")
-	}
-
-	// Verify both use proper protocols
-	validProtocols := []string{"http://", "https://"}
-	hasValidProtocol := false
-	for _, protocol := range validProtocols {
-		if strings.HasPrefix(IPAPIAddress, protocol) {
-			hasValidProtocol = true
-			break
-		}
-	}
-	if !hasValidProtocol {
-		t.Errorf("IPAPIAddress has invalid protocol: %s", IPAPIAddress)
 	}
 }

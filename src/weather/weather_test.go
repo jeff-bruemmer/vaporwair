@@ -1,30 +1,11 @@
 package weather
 
 import (
-	"encoding/json"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
+	"strconv"
 	"testing"
 	"time"
 )
-
-// Sample NOAA Points API response
-func getSampleNOAAPointsResponse() NOAAPointsResponse {
-	return NOAAPointsResponse{
-		Properties: NOAAPointsProperties{
-			GridID:         "PHI",
-			GridX:          45,
-			GridY:          67,
-			Forecast:       "https://api.weather.gov/gridpoints/PHI/45,67/forecast",
-			ForecastHourly: "https://api.weather.gov/gridpoints/PHI/45,67/forecast/hourly",
-			RelativeLocation: NOAARelativeLocation{
-				Properties: NOAARelativeLocationProps{
-					City:  "Philadelphia",
-					State: "PA",
-				},
-			},
-		},
-	}
-}
 
 // Sample NOAA Daily Forecast response with day period first
 func getSampleNOAADailyForecastDayFirst() NOAAForecastResponse {
@@ -34,16 +15,13 @@ func getSampleNOAADailyForecastDayFirst() NOAAForecastResponse {
 
 	return NOAAForecastResponse{
 		Properties: NOAAForecastProperties{
-			Updated: "2025-10-24T12:00:00+00:00",
 			Periods: []NOAAPeriod{
 				{
-					Number:                     1,
 					Name:                       "Today",
 					StartTime:                  "2025-10-24T06:00:00-04:00",
 					EndTime:                    "2025-10-24T18:00:00-04:00",
 					IsDaytime:                  true,
 					Temperature:                75,
-					TemperatureUnit:            "F",
 					WindSpeed:                  "10 to 15 mph",
 					WindDirection:              "SW",
 					ShortForecast:              "Partly Cloudy",
@@ -53,13 +31,11 @@ func getSampleNOAADailyForecastDayFirst() NOAAForecastResponse {
 					RelativeHumidity:           NOAAValue{Value: &humidity},
 				},
 				{
-					Number:                     2,
 					Name:                       "Tonight",
 					StartTime:                  "2025-10-24T18:00:00-04:00",
 					EndTime:                    "2025-10-25T06:00:00-04:00",
 					IsDaytime:                  false,
 					Temperature:                55,
-					TemperatureUnit:            "F",
 					WindSpeed:                  "5 to 10 mph",
 					WindDirection:              "S",
 					ShortForecast:              "Mostly Clear",
@@ -81,16 +57,13 @@ func getSampleNOAADailyForecastNightFirst() NOAAForecastResponse {
 
 	return NOAAForecastResponse{
 		Properties: NOAAForecastProperties{
-			Updated: "2025-10-24T20:00:00+00:00",
 			Periods: []NOAAPeriod{
 				{
-					Number:                     1,
 					Name:                       "Tonight",
 					StartTime:                  "2025-10-24T18:00:00-04:00",
 					EndTime:                    "2025-10-25T06:00:00-04:00",
 					IsDaytime:                  false,
 					Temperature:                50,
-					TemperatureUnit:            "F",
 					WindSpeed:                  "5 mph",
 					WindDirection:              "NW",
 					ShortForecast:              "Clear",
@@ -100,17 +73,29 @@ func getSampleNOAADailyForecastNightFirst() NOAAForecastResponse {
 					RelativeHumidity:           NOAAValue{Value: &humidity},
 				},
 				{
-					Number:                     2,
 					Name:                       "Tomorrow",
 					StartTime:                  "2025-10-25T06:00:00-04:00",
 					EndTime:                    "2025-10-25T18:00:00-04:00",
 					IsDaytime:                  true,
 					Temperature:                80,
-					TemperatureUnit:            "F",
 					WindSpeed:                  "10 mph",
 					WindDirection:              "W",
 					ShortForecast:              "Sunny",
 					DetailedForecast:           "Sunny skies throughout the day.",
+					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
+					Dewpoint:                   NOAAValue{Value: &dewpoint},
+					RelativeHumidity:           NOAAValue{Value: &humidity},
+				},
+				{
+					Name:                       "Tomorrow Night",
+					StartTime:                  "2025-10-25T18:00:00-04:00",
+					EndTime:                    "2025-10-26T06:00:00-04:00",
+					IsDaytime:                  false,
+					Temperature:                60,
+					WindSpeed:                  "5 mph",
+					WindDirection:              "W",
+					ShortForecast:              "Mostly Clear",
+					DetailedForecast:           "Mostly clear.",
 					ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
 					Dewpoint:                   NOAAValue{Value: &dewpoint},
 					RelativeHumidity:           NOAAValue{Value: &humidity},
@@ -128,16 +113,13 @@ func getSampleNOAAHourlyForecast() NOAAForecastResponse {
 
 	return NOAAForecastResponse{
 		Properties: NOAAForecastProperties{
-			Updated: "2025-10-24T12:00:00+00:00",
 			Periods: []NOAAPeriod{
 				{
-					Number:                     1,
 					Name:                       "Now",
 					StartTime:                  "2025-10-24T12:00:00-04:00",
 					EndTime:                    "2025-10-24T13:00:00-04:00",
 					IsDaytime:                  true,
 					Temperature:                72,
-					TemperatureUnit:            "F",
 					WindSpeed:                  "12 mph",
 					WindDirection:              "SW",
 					ShortForecast:              "Partly Cloudy",
@@ -147,13 +129,11 @@ func getSampleNOAAHourlyForecast() NOAAForecastResponse {
 					RelativeHumidity:           NOAAValue{Value: &humidity},
 				},
 				{
-					Number:                     2,
 					Name:                       "1pm",
 					StartTime:                  "2025-10-24T13:00:00-04:00",
 					EndTime:                    "2025-10-24T14:00:00-04:00",
 					IsDaytime:                  true,
 					Temperature:                74,
-					TemperatureUnit:            "F",
 					WindSpeed:                  "13 mph",
 					WindDirection:              "SW",
 					ShortForecast:              "Mostly Sunny",
@@ -168,7 +148,6 @@ func getSampleNOAAHourlyForecast() NOAAForecastResponse {
 }
 
 func TestConvertNOAAToForecast(t *testing.T) {
-	points := getSampleNOAAPointsResponse()
 	daily := getSampleNOAADailyForecastDayFirst()
 	hourly := getSampleNOAAHourlyForecast()
 	coords := geolocation.Coordinates{
@@ -176,9 +155,8 @@ func TestConvertNOAAToForecast(t *testing.T) {
 		Longitude: "-75.1652",
 	}
 
-	forecast := ConvertNOAAToForecast(points, daily, hourly, coords)
+	forecast := ConvertNOAAToForecast(daily, hourly, coords)
 
-	// Test basic properties
 	if forecast.Latitude != 39.9526 {
 		t.Errorf("Expected latitude 39.9526, got %f", forecast.Latitude)
 	}
@@ -187,17 +165,14 @@ func TestConvertNOAAToForecast(t *testing.T) {
 		t.Errorf("Expected longitude -75.1652, got %f", forecast.Longitude)
 	}
 
-	// Test currently (from first hourly period)
 	if forecast.Currently.Temperature != 72 {
 		t.Errorf("Expected current temperature 72, got %f", forecast.Currently.Temperature)
 	}
 
-	// Test hourly data
 	if len(forecast.Hourly.Data) != 2 {
 		t.Errorf("Expected 2 hourly data points, got %d", len(forecast.Hourly.Data))
 	}
 
-	// Test daily data
 	if len(forecast.Daily.Data) != 1 {
 		t.Errorf("Expected 1 daily data point, got %d", len(forecast.Daily.Data))
 	}
@@ -222,13 +197,11 @@ func TestConvertNOAADailyPeriodsToDataBlock_DayFirst(t *testing.T) {
 		t.Errorf("Expected min temperature 55, got %f", dp.TemperatureMin)
 	}
 
-	// Verify precipitation probability is converted from percentage to decimal
 	expected := 0.30
 	if dp.PrecipProbability != expected {
 		t.Errorf("Expected precip probability %f, got %f", expected, dp.PrecipProbability)
 	}
 
-	// Verify humidity is converted from percentage to decimal
 	expectedHumidity := 0.65
 	if dp.Humidity != expectedHumidity {
 		t.Errorf("Expected humidity %f, got %f", expectedHumidity, dp.Humidity)
@@ -263,6 +236,34 @@ func TestConvertNOAADailyPeriodsToDataBlock_NightFirst(t *testing.T) {
 	if tomorrow.TemperatureMax != 80 {
 		t.Errorf("Expected tomorrow's high 80, got %f", tomorrow.TemperatureMax)
 	}
+	if tomorrow.TemperatureMin != 60 {
+		t.Errorf("Expected tomorrow's low 60, got %f", tomorrow.TemperatureMin)
+	}
+}
+
+// NOAA sends 14 periods. Starting at night, the last is a day whose night isn't in the
+// forecast; it has no low, so it is left out rather than shown with a low of 0F.
+func TestDayWithoutNightLeftOut(t *testing.T) {
+	var periods []NOAAPeriod
+	for i := range 14 {
+		periods = append(periods, NOAAPeriod{
+			Name:        "Period " + strconv.Itoa(i),
+			StartTime:   "2025-10-24T18:00:00-04:00",
+			IsDaytime:   i%2 == 1,
+			Temperature: 40 + i,
+		})
+	}
+
+	block := convertNOAADailyPeriodsToDataBlock(periods)
+
+	if len(block.Data) != 7 {
+		t.Fatalf("Expected Tonight and 6 days, got %d entries", len(block.Data))
+	}
+	for _, d := range block.Data {
+		if d.TemperatureMin == 0 {
+			t.Errorf("%s has no low", d.PeriodName)
+		}
+	}
 }
 
 func TestTonightHighFromHourly(t *testing.T) {
@@ -279,7 +280,7 @@ func TestTonightHighFromHourly(t *testing.T) {
 		{StartTime: at(11), Temperature: 70}, // after tonight ends
 	}}}
 
-	f := ConvertNOAAToForecast(NOAAPointsResponse{}, daily, hourly, geolocation.Coordinates{})
+	f := ConvertNOAAToForecast(daily, hourly, geolocation.Coordinates{})
 
 	if got := f.Daily.Data[0].TemperatureMax; got != 61 {
 		t.Errorf("Expected tonight's high to be warmest remaining hour (61), got %f", got)
@@ -295,7 +296,6 @@ func TestConvertNOAAPeriodToDataPoint(t *testing.T) {
 	humidity := 75.0
 
 	period := NOAAPeriod{
-		Number:                     1,
 		Name:                       "Today",
 		StartTime:                  "2025-10-24T12:00:00-04:00",
 		IsDaytime:                  true,
@@ -314,36 +314,27 @@ func TestConvertNOAAPeriodToDataPoint(t *testing.T) {
 		t.Errorf("Expected temperature 70, got %f", dp.Temperature)
 	}
 
-	// Test wind speed parsing
 	if dp.WindSpeed != 10 {
 		t.Errorf("Expected wind speed 10 (first number from range), got %f", dp.WindSpeed)
 	}
 
-	// Test wind direction parsing
 	if dp.WindBearing != 45 {
 		t.Errorf("Expected wind bearing 45 (NE), got %f", dp.WindBearing)
 	}
 
-	// Test precipitation probability conversion
 	if dp.PrecipProbability != 0.25 {
 		t.Errorf("Expected precip probability 0.25, got %f", dp.PrecipProbability)
 	}
 
-	// Test dewpoint conversion from Celsius to Fahrenheit
 	expectedDewpoint := celsiusToFahrenheit(15.0)
 	if dp.DewPoint != expectedDewpoint {
 		t.Errorf("Expected dewpoint %f, got %f", expectedDewpoint, dp.DewPoint)
 	}
 
-	// Test humidity conversion
 	if dp.Humidity != 0.75 {
 		t.Errorf("Expected humidity 0.75, got %f", dp.Humidity)
 	}
 
-	// Test icon mapping
-	if dp.Icon != "rain" {
-		t.Errorf("Expected icon 'rain', got '%s'", dp.Icon)
-	}
 }
 
 func TestParseWindSpeed(t *testing.T) {
@@ -358,9 +349,9 @@ func TestParseWindSpeed(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := parseWindSpeed(test.input)
+		result := parseFloat(test.input)
 		if result != test.expected {
-			t.Errorf("parseWindSpeed(%q) = %f, expected %f", test.input, result, test.expected)
+			t.Errorf("parseFloat(%q) = %f, expected %f", test.input, result, test.expected)
 		}
 	}
 }
@@ -413,37 +404,8 @@ func TestCelsiusToFahrenheit(t *testing.T) {
 	}
 }
 
-func TestMapNOAAIconToIcon(t *testing.T) {
-	tests := []struct {
-		forecast string
-		icon     string
-	}{
-		{"Sunny", "clear-day"},
-		{"Clear", "clear-day"},
-		{"Partly Cloudy", "partly-cloudy-day"},
-		{"Partly Sunny", "partly-cloudy-day"},
-		{"Mostly Cloudy", "cloudy"},
-		{"Cloudy", "cloudy"},
-		{"Rain", "rain"},
-		{"Showers", "rain"},
-		{"Snow", "snow"},
-		{"Thunderstorm", "thunderstorm"},
-		{"Fog", "fog"},
-		{"Unknown Condition", "partly-cloudy-day"}, // Default
-	}
-
-	for _, test := range tests {
-		result := mapNOAAIconToIcon(test.forecast)
-		if result != test.icon {
-			t.Errorf("mapNOAAIconToIcon(%q) = %q, expected %q", test.forecast, result, test.icon)
-		}
-	}
-}
-
 func TestNullValueHandling(t *testing.T) {
-	// Test that nil values don't cause crashes
 	period := NOAAPeriod{
-		Number:                     1,
 		StartTime:                  "2025-10-24T12:00:00-04:00",
 		Temperature:                70,
 		WindSpeed:                  "10 mph",
@@ -471,14 +433,12 @@ func TestNullValueHandling(t *testing.T) {
 }
 
 func TestOddNumberOfPeriods(t *testing.T) {
-	// Test handling when there's an odd number of periods (no night period for last day)
 	precipProb := 15.0
 	dewpoint := 10.0
 	humidity := 65.0
 
 	periods := []NOAAPeriod{
 		{
-			Number:                     1,
 			Name:                       "Today",
 			StartTime:                  "2025-10-24T06:00:00-04:00",
 			IsDaytime:                  true,
@@ -510,8 +470,6 @@ func TestOddNumberOfPeriods(t *testing.T) {
 		t.Errorf("Expected min temperature 0 (no night period), got %f", dp.TemperatureMin)
 	}
 }
-
-// NEW TESTS FOR ENHANCED FEATURES
 
 func TestApparentTemperatureCalculation(t *testing.T) {
 	tests := []struct {
@@ -591,39 +549,12 @@ func TestPrecipitationTypeExtraction(t *testing.T) {
 	}
 }
 
-func TestSunriseSunsetExtraction(t *testing.T) {
-	// Test sunrise/sunset from NOAA icon URLs
-	// NOAA embeds day/night info in icon URLs like:
-	// https://api.weather.gov/icons/land/day/skc?size=medium
-	// https://api.weather.gov/icons/land/night/skc?size=medium
-
-	tests := []struct {
-		iconURL   string
-		isDaytime bool
-	}{
-		{"https://api.weather.gov/icons/land/day/skc?size=medium", true},
-		{"https://api.weather.gov/icons/land/night/skc?size=medium", false},
-		{"https://api.weather.gov/icons/land/day/rain?size=medium", true},
-		{"https://api.weather.gov/icons/land/night/snow?size=medium", false},
-	}
-
-	for _, test := range tests {
-		result := isIconDaytime(test.iconURL)
-		if result != test.isDaytime {
-			t.Errorf("isIconDaytime(%q) = %v, expected %v",
-				test.iconURL, result, test.isDaytime)
-		}
-	}
-}
-
 func TestPrecipitationTypeInDataPoint(t *testing.T) {
-	// Test that precipitation type is properly extracted and stored
 	precipProb := 80.0
 	dewpoint := 10.0
 	humidity := 70.0
 
 	period := NOAAPeriod{
-		Number:                     1,
 		Name:                       "Today",
 		StartTime:                  "2025-10-24T12:00:00-04:00",
 		IsDaytime:                  true,
@@ -644,7 +575,6 @@ func TestPrecipitationTypeInDataPoint(t *testing.T) {
 		t.Errorf("Expected precip type 'snow', got '%s'", dp.PrecipType)
 	}
 
-	// Test with rain
 	period.ShortForecast = "Rain Showers"
 	period.DetailedForecast = "Rain showers likely."
 	dp = convertNOAAPeriodToDataPoint(period)
@@ -660,7 +590,6 @@ func TestApparentTemperatureInConversion(t *testing.T) {
 	humidity := 80.0
 
 	period := NOAAPeriod{
-		Number:                     1,
 		Name:                       "Now",
 		StartTime:                  "2025-10-24T14:00:00-04:00",
 		Temperature:                90,
@@ -680,7 +609,6 @@ func TestApparentTemperatureInConversion(t *testing.T) {
 			dp.ApparentTemperature, dp.Temperature)
 	}
 
-	// Verify it's not zero (which would indicate it wasn't calculated)
 	if dp.ApparentTemperature == 0 {
 		t.Error("Apparent temperature should not be zero when conditions are available")
 	}
@@ -808,97 +736,6 @@ func TestWindChillNotAppliedInWarmWeather(t *testing.T) {
 	}
 }
 
-// TestForecastStructIntegrity ensures the Forecast struct works correctly after dead code removal.
-func TestForecastStructIntegrity(t *testing.T) {
-	// Create a forecast with typical NOAA data
-	forecast := Forecast{
-		Latitude:  40.7128,
-		Longitude: -74.0060,
-		Timezone:  "America/New_York",
-		Currently: DataPoint{
-			Time:                1730000000,
-			Temperature:         72,
-			ApparentTemperature: 75,
-			Humidity:            0.65,
-			WindSpeed:           10,
-			Summary:             "Partly Cloudy",
-		},
-		Hourly: DataBlock{
-			Summary: "Partly cloudy for the hour",
-			Data: []DataPoint{
-				{Time: 1730000000, Temperature: 72},
-				{Time: 1730003600, Temperature: 71},
-			},
-		},
-		Daily: DataBlock{
-			Summary: "Partly cloudy throughout the week",
-			Data: []DataPoint{
-				{Time: 1730000000, TemperatureMax: 75, TemperatureMin: 60},
-			},
-		},
-		Alerts: []Alert{},
-	}
-
-	// Test that we can access all necessary fields
-	if forecast.Latitude != 40.7128 {
-		t.Errorf("Latitude not preserved")
-	}
-	if forecast.Currently.Temperature != 72 {
-		t.Errorf("Current temperature not preserved")
-	}
-	if len(forecast.Hourly.Data) != 2 {
-		t.Errorf("Hourly data not preserved")
-	}
-	if len(forecast.Daily.Data) != 1 {
-		t.Errorf("Daily data not preserved")
-	}
-
-	// Test JSON serialization/deserialization still works
-	data, err := json.Marshal(forecast)
-	if err != nil {
-		t.Fatalf("Failed to marshal forecast: %v", err)
-	}
-
-	var decoded Forecast
-	err = json.Unmarshal(data, &decoded)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal forecast: %v", err)
-	}
-
-	if decoded.Latitude != forecast.Latitude {
-		t.Errorf("Latitude changed after JSON round-trip")
-	}
-	if decoded.Currently.Temperature != forecast.Currently.Temperature {
-		t.Errorf("Temperature changed after JSON round-trip")
-	}
-}
-
-// TestPrecipTypeUnicodeHandling tests that precipitation type extraction works with Unicode characters.
-// This test will FAIL with current manual lowercasing that only handles ASCII.
-func TestPrecipTypeUnicodeHandling(t *testing.T) {
-	tests := []struct {
-		forecast     string
-		expectedType string
-	}{
-		{"Light rain", "rain"}, // ASCII lowercase
-		{"Light Rain", "rain"}, // ASCII uppercase
-		{"LIGHT RAIN", "rain"}, // ASCII all caps
-		{"Light Räin", ""},     // Unicode - current code breaks
-		{"Légère pluie", ""},   // French with accents
-		{"Дождь", ""},          // Cyrillic (means "rain" in Russian)
-	}
-
-	for _, test := range tests {
-		result := extractPrecipType(test.forecast)
-		// Note: We expect "" for non-English because we only check English keywords
-		// But the function shouldn't crash or produce garbage
-		if result != test.expectedType && test.expectedType == "rain" {
-			t.Errorf("extractPrecipType(%q) = %q, expected %q",
-				test.forecast, result, test.expectedType)
-		}
-	}
-}
-
 // TestPrecipTypeAdditionalPatterns tests patterns we should handle but currently don't.
 // These tests will FAIL, showing we need to add more patterns.
 func TestPrecipTypeAdditionalPatterns(t *testing.T) {
@@ -938,145 +775,5 @@ func BenchmarkPrecipTypeLongString(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = extractPrecipType(forecast)
-	}
-}
-
-// TestPeriodNameExtraction tests that NOAA period names are properly extracted and stored.
-// This test will FAIL until we add the PeriodName field.
-func TestPeriodNameExtraction(t *testing.T) {
-	tests := []struct {
-		name         string
-		periodName   string
-		expectedName string
-	}{
-		{"This Afternoon", "This Afternoon", "This Afternoon"},
-		{"Tonight", "Tonight", "Tonight"},
-		{"Tomorrow", "Tomorrow", "Tomorrow"},
-		{"Monday", "Monday", "Monday"},
-		{"Monday Night", "Monday Night", "Monday Night"},
-		{"Tuesday", "Tuesday", "Tuesday"},
-		{"Overnight", "Overnight", "Overnight"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			precipProb := 25.0
-			dewpoint := 15.0
-			humidity := 60.0
-
-			period := NOAAPeriod{
-				Number:                     1,
-				Name:                       test.periodName,
-				StartTime:                  "2025-11-01T14:00:00-04:00",
-				Temperature:                72,
-				WindSpeed:                  "10 mph",
-				WindDirection:              "SW",
-				ShortForecast:              "Partly Cloudy",
-				ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
-				Dewpoint:                   NOAAValue{Value: &dewpoint},
-				RelativeHumidity:           NOAAValue{Value: &humidity},
-			}
-
-			dp := convertNOAAPeriodToDataPoint(period)
-
-			if dp.PeriodName != test.expectedName {
-				t.Errorf("Expected PeriodName to be %q, got %q", test.expectedName, dp.PeriodName)
-			}
-		})
-	}
-}
-
-// TestDailyPeriodNames tests that period names are preserved in daily conversion.
-func TestDailyPeriodNames(t *testing.T) {
-	precipProb := 20.0
-	dewpoint := 10.0
-	humidity := 65.0
-
-	periods := []NOAAPeriod{
-		{
-			Number:                     1,
-			Name:                       "Today",
-			StartTime:                  "2025-11-01T06:00:00-04:00",
-			IsDaytime:                  true,
-			Temperature:                75,
-			WindSpeed:                  "10 mph",
-			WindDirection:              "S",
-			ShortForecast:              "Sunny",
-			ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
-			Dewpoint:                   NOAAValue{Value: &dewpoint},
-			RelativeHumidity:           NOAAValue{Value: &humidity},
-		},
-		{
-			Number:                     2,
-			Name:                       "Tonight",
-			StartTime:                  "2025-11-01T18:00:00-04:00",
-			IsDaytime:                  false,
-			Temperature:                55,
-			WindSpeed:                  "5 mph",
-			WindDirection:              "S",
-			ShortForecast:              "Clear",
-			ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
-			Dewpoint:                   NOAAValue{Value: &dewpoint},
-			RelativeHumidity:           NOAAValue{Value: &humidity},
-		},
-	}
-
-	block := convertNOAADailyPeriodsToDataBlock(periods)
-
-	if len(block.Data) != 1 {
-		t.Fatalf("Expected 1 daily data point, got %d", len(block.Data))
-	}
-
-	// For daily view, we should use the day period name
-	if block.Data[0].PeriodName != "Today" {
-		t.Errorf("Expected daily period name to be 'Today', got %q", block.Data[0].PeriodName)
-	}
-}
-
-// TestHourlyPeriodNames tests that hourly periods preserve their names.
-func TestHourlyPeriodNames(t *testing.T) {
-	precipProb := 15.0
-	dewpoint := 12.0
-	humidity := 70.0
-
-	periods := []NOAAPeriod{
-		{
-			Number:                     1,
-			Name:                       "This Afternoon",
-			StartTime:                  "2025-11-01T14:00:00-04:00",
-			Temperature:                72,
-			WindSpeed:                  "8 mph",
-			WindDirection:              "W",
-			ShortForecast:              "Partly Cloudy",
-			ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
-			Dewpoint:                   NOAAValue{Value: &dewpoint},
-			RelativeHumidity:           NOAAValue{Value: &humidity},
-		},
-		{
-			Number:                     2,
-			Name:                       "This Evening",
-			StartTime:                  "2025-11-01T18:00:00-04:00",
-			Temperature:                68,
-			WindSpeed:                  "6 mph",
-			WindDirection:              "W",
-			ShortForecast:              "Mostly Clear",
-			ProbabilityOfPrecipitation: NOAAValue{Value: &precipProb},
-			Dewpoint:                   NOAAValue{Value: &dewpoint},
-			RelativeHumidity:           NOAAValue{Value: &humidity},
-		},
-	}
-
-	block := convertNOAAPeriodsToDataBlock(periods)
-
-	if len(block.Data) != 2 {
-		t.Fatalf("Expected 2 hourly data points, got %d", len(block.Data))
-	}
-
-	if block.Data[0].PeriodName != "This Afternoon" {
-		t.Errorf("Expected first period name to be 'This Afternoon', got %q", block.Data[0].PeriodName)
-	}
-
-	if block.Data[1].PeriodName != "This Evening" {
-		t.Errorf("Expected second period name to be 'This Evening', got %q", block.Data[1].PeriodName)
 	}
 }

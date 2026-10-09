@@ -33,7 +33,6 @@ func TestBuildAirNowURL(t *testing.T) {
 		t.Errorf("BuildAirNowURL(AirNowAddress, exZip, exKey) = %s; want "+answer, got)
 	}
 
-	// Verify HTTPS is used
 	if !strings.Contains(got, "https://") {
 		t.Error("Expected HTTPS URL, got HTTP")
 	}
@@ -60,12 +59,10 @@ func TestGetForecast_WithMockServer(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify we got the expected number of forecasts
 	if len(forecasts) != 3 {
 		t.Errorf("Expected 3 forecasts, got %d", len(forecasts))
 	}
 
-	// Verify first forecast data
 	if forecasts[0].ParameterName != "OZONE" {
 		t.Errorf("Expected first parameter name 'OZONE', got '%s'", forecasts[0].ParameterName)
 	}
@@ -82,7 +79,6 @@ func TestGetForecast_WithMockServer(t *testing.T) {
 		t.Errorf("Expected first category number 2, got %d", forecasts[0].Category.Number)
 	}
 
-	// Verify we have both today and tomorrow's forecasts
 	dates := make(map[string]bool)
 	for _, f := range forecasts {
 		dates[f.DateForecast] = true
@@ -107,7 +103,6 @@ func TestGetForecast_EmptyResponse(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify we got an empty slice
 	if len(forecasts) != 0 {
 		t.Errorf("Expected 0 forecasts for empty response, got %d", len(forecasts))
 	}
@@ -127,7 +122,6 @@ func TestGetForecast_NullResponse(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify we got an empty slice (not nil)
 	if forecasts == nil {
 		t.Error("Expected non-nil slice for null response, got nil")
 	}
@@ -149,7 +143,6 @@ func TestAirQualityIntegration(t *testing.T) {
 
 	// Build URL with mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify query parameters are correct
 		query := r.URL.Query()
 		if query.Get("zipCode") != coords.Zip {
 			t.Errorf("Expected zipCode %s, got %s", coords.Zip, query.Get("zipCode"))
@@ -175,12 +168,10 @@ func TestAirQualityIntegration(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify we got data
 	if len(forecasts) == 0 {
 		t.Error("Expected air quality forecasts, got none")
 	}
 
-	// Verify the data structure
 	if forecasts[0].ReportingArea == "" {
 		t.Error("Expected reporting area to be set")
 	}

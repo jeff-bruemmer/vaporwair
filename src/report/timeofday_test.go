@@ -186,6 +186,22 @@ func TestClothingRangeLabels(t *testing.T) {
 	}
 }
 
+// A wind chill of 44.6F shows as 45F, so the outfit and the marked row are 45-54F's.
+func TestOutfitMatchesShownTemperature(t *testing.T) {
+	withClock(t, at(19, 11))
+	w := eveningForecast()
+	for i := range w.Hourly.Data {
+		w.Hourly.Data[i].ApparentTemperature = max(w.Hourly.Data[i].ApparentTemperature, 44.6)
+	}
+	if got := GetClothingRecommendation(w, nil).Outfit; got != OutfitDescWarmLayers {
+		t.Errorf("outfit = %q, want %q", got, OutfitDescWarmLayers)
+	}
+	out := capture(t, func() { ClothingReport(w, nil) })
+	if !strings.Contains(out, "feels as cold as 45F") || !strings.Contains(out, "> 45-54F") {
+		t.Errorf("shown temperature and marked row disagree:\n%s", out)
+	}
+}
+
 func TestFormatAlertWindow(t *testing.T) {
 	now := at(19, 11)
 	tests := []struct {

@@ -8,11 +8,6 @@ import (
 
 func WeatherHourly(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Hourly Summary"))
-	if w.Hourly.Summary != "" {
-		fmt.Println(AddPeriod(w.Hourly.Summary))
-		fmt.Println()
-	}
-
 	hoursTable(LimitData(upcomingHours(w.Hourly.Data), DefaultHourlyLimit), true)
 }
 
@@ -44,17 +39,13 @@ func hoursTable(hours []weather.DataPoint, detail bool) {
 	// Leave conditions blank when unchanged from the row above, so changes stand out.
 	prevConditions := ""
 	for _, h := range hours {
-		label := h.PeriodName
-		if label == "" {
-			label = FormatTime(h.Time)
-		}
 		conditions := Truncate(h.Summary, max(ReportWidth-fixed, 12))
 		if h.Summary == prevConditions {
 			conditions = ""
 		}
 		prevConditions = h.Summary
 
-		fmt.Fprintf(Table, "%s\t%.0f\t%.0f\t", label, Round(h.Temperature), Round(h.ApparentTemperature))
+		fmt.Fprintf(Table, "%s\t%.0f\t%.0f\t", FormatTime(h.Time), Round(h.Temperature), Round(h.ApparentTemperature))
 		if detail {
 			fmt.Fprintf(Table, "%.0f\t", h.DewPoint)
 		}

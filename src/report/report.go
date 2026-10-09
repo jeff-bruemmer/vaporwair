@@ -91,13 +91,12 @@ func Title(t string) string {
 	return Bold(title)
 }
 
-// Adds period to end of string if one is not present.
+// AddPeriod adds a period to the end of s if one is not present.
 func AddPeriod(s string) string {
-	if strings.LastIndex(s, ".") != len(s)-1 {
-		return s + "."
-	} else {
+	if strings.HasSuffix(s, ".") {
 		return s
 	}
+	return s + "."
 }
 
 // Converts decimal to percent
@@ -115,13 +114,9 @@ func FormatTime(t float64) string {
 	return time.Unix(int64(t), 0).Format("15:04")
 }
 
-// Limit slice of data, provided the slice is at least the desired length.
+// LimitData returns at most the first l data points.
 func LimitData(d []weather.DataPoint, l int) []weather.DataPoint {
-	if len(d) >= l {
-		return d[0:l]
-	} else {
-		return d
-	}
+	return d[:min(len(d), l)]
 }
 
 // printHighLow prints today's high and low. In the evening NOAA's first period is a night
@@ -176,9 +171,6 @@ func conditionFields(tw *tabwriter.Writer, w weather.Forecast, a []air.Forecast)
 		fmt.Fprintf(tw, formatString, "Air Quality", aqi)
 	}
 }
-
-// Note: Sunrise/Sunset times are not available from NOAA forecast API.
-// Would require astronomical calculations or integration with a separate API like sunrise-sunset.org
 
 // airQualityLine formats today's highest AQI, e.g. "30 AQI (OZONE) - Good".
 // It reports false when there is no numeric forecast for today.

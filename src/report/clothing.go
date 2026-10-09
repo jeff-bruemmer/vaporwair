@@ -49,13 +49,12 @@ type Note struct {
 
 // getBaseOutfit returns clothing recommendations based on temperature.
 func getBaseOutfit(temp float64) string {
-	tempInt := int(temp)
+	tempInt := int(Round(temp)) // the shown value, so the marked row matches it
 	for _, level := range OutfitLevels {
 		if tempInt >= level.MinTemp && tempInt <= level.MaxTemp {
 			return level.Outfit
 		}
 	}
-	// Fallback to extreme cold if somehow no match
 	return OutfitDescExtremeCold
 }
 
@@ -79,7 +78,6 @@ func GetClothingRecommendation(f weather.Forecast, a []air.Forecast) ClothingRec
 	rec.Outfit = getBaseOutfit(temp)
 	rec.Accessories = []string{}
 
-	// Temperature-based accessories
 	if temp < 40 {
 		rec.Accessories = append(rec.Accessories, "Winter hat or beanie", "Gloves or mittens", "Scarf")
 	}
@@ -88,7 +86,6 @@ func GetClothingRecommendation(f weather.Forecast, a []air.Forecast) ClothingRec
 		addNote(notePrioritySafety, "Limit outdoor exposure in extreme cold")
 	}
 
-	// Sun protection for hot weather
 	if hot >= 75 {
 		rec.Accessories = append(rec.Accessories, "Sunglasses", "Sun hat or cap")
 		addNote(notePriorityComfort, "Apply sunscreen (SPF 30+)")
@@ -188,23 +185,17 @@ func ClothingSummary(w weather.Forecast, a []air.Forecast) {
 
 	fmt.Println(Title("What to Wair"))
 
-	// Base outfit
 	fmt.Fprintf(TW, "Outfit:\t%s\n", rec.Outfit)
 
-	// Accessories (show up to 3 most important)
-	if len(rec.Accessories) > 0 {
-		count := len(rec.Accessories)
-		if count > 3 {
-			count = 3
+	// The 3 most important accessories
+	if n := len(rec.Accessories); n > 0 {
+		list := strings.Join(sentenceList(rec.Accessories[:min(n, 3)]), ", ")
+		if n > 3 {
+			list += fmt.Sprintf(", +%d more", n-3)
 		}
-		accessoryList := strings.Join(sentenceList(rec.Accessories[:count]), ", ")
-		if len(rec.Accessories) > 3 {
-			accessoryList += fmt.Sprintf(", +%d more", len(rec.Accessories)-3)
-		}
-		fmt.Fprintf(TW, "Bring:\t%s\n", accessoryList)
+		fmt.Fprintf(TW, "Bring:\t%s\n", list)
 	}
 
-	// Show most important tip (first one)
 	if len(rec.Notes) > 0 {
 		fmt.Fprintf(TW, "Tip:\t%s\n", rec.Notes[0].Text)
 	}
@@ -243,11 +234,7 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println()
 
 	rec := GetClothingRecommendation(w, a)
-
-	// Find the most current hourly data point (closest to now)
 	current := GetCurrentHourlyData(w)
-
-	// Temperature summary
 	FormatTemperatureWithFeelsLike(TW, "Current", Round(current.Temperature), Round(current.ApparentTemperature), temperatureUnit)
 	// Warmest is an actual temperature and Coldest a feels-like one, so label each.
 	coldest := fmt.Sprintf("feels as cold as %.0f%s", Round(rec.Coldest), temperatureUnit)
@@ -259,7 +246,7 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println()
 
 	// Outfit tiers, with the recommended one marked
-	basis := int(rec.Coldest)
+	basis := int(Round(rec.Coldest))
 	printTableHeader([]column{{"  Feels like", ""}, {"Outfit", ""}})
 	for _, level := range OutfitLevels {
 		indicator := "  "
@@ -282,7 +269,6 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 	Table.Flush()
 	fmt.Println()
 
-	// Accessories
 	if len(rec.Accessories) > 0 {
 		fmt.Println("Bring:")
 		for _, accessory := range rec.Accessories {
@@ -326,15 +312,11 @@ func ClothingReport(w weather.Forecast, a []air.Forecast) {
 				fmt.Fprintf(TW, "Peak times:\n")
 				peak = true
 			}
-			label := hour.PeriodName
-			if label == "" {
-				label = FormatTime(hour.Time)
-			}
 			kind := hour.PrecipType
 			if kind == "" {
 				kind = "precip"
 			}
-			fmt.Fprintf(TW, "  %-8s  %.0f%% %s\n", label, ToPercent(hour.PrecipProbability), kind)
+			fmt.Fprintf(TW, "  %-8s  %.0f%% %s\n", FormatTime(hour.Time), ToPercent(hour.PrecipProbability), kind)
 		}
 	} else {
 		fmt.Fprintf(TW, "No precipitation expected until %s\n", until)
