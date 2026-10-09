@@ -20,8 +20,6 @@ func fixtureForecast() (weather.Forecast, []air.Forecast) {
 	now := time.Now().Truncate(time.Hour)
 	var w weather.Forecast
 	w.Currently = weather.DataPoint{Time: float64(now.Unix()), Summary: "Light Snow", Pressure: 30.02, Visibility: 4}
-	w.Daily.Summary = "Snow likely, mainly after 1pm. High near 12. Wind chill values as low as -15."
-	w.Hourly.Summary = "Snow through the evening."
 
 	for i := range 24 {
 		w.Hourly.Data = append(w.Hourly.Data, weather.DataPoint{
@@ -215,8 +213,8 @@ func TestHourlyHasConditions(t *testing.T) {
 // The daily report shows each narrative once, and every day's values start in the same column.
 func TestDailyAlignedWithoutRepeats(t *testing.T) {
 	w, a := fixtureForecast()
-	w.Daily.Data[0].DetailedForecast = w.Daily.Summary // as NOAA sends it
-	w.Daily.Data[3].PrecipType = ""                    // a longer "Precipitation Chance" label on one day
+	w.Daily.Data[0].DetailedForecast = "Snow likely, mainly after 1pm. High near 12. Wind chill values as low as -15."
+	w.Daily.Data[3].PrecipType = "" // a longer "Precipitation Chance" label on one day
 	out := capture(t, func() { WeatherDaily(w, a) })
 	if n := strings.Count(out, "Snow likely, mainly after 1pm"); n != 1 {
 		t.Errorf("first day's forecast appears %d times:\n%s", n, out)

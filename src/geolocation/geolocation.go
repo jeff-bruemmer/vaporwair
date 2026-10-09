@@ -18,21 +18,11 @@ type Coordinates struct {
 	Zip       string
 }
 
+// GeoData is a location found from an IP address or a zip code.
 type GeoData struct {
-	Status      string  `json:"status"`
-	Country     string  `json:"country"`
-	CountryCode string  `json:"countryCode"`
-	Region      string  `json:"region"`
-	RegionName  string  `json:"regionName"`
-	City        string  `json:"city"`
-	Zip         string  `json:"zip"`
-	Lat         float64 `json:"lat"`
-	Lon         float64 `json:"lon"`
-	Timezone    string  `json:"timezone"`
-	Isp         string  `json:"isp"`
-	Org         string  `json:"org"`
-	As          string  `json:"as"`
-	Query       string  `json:"query"`
+	City     string
+	Zip      string
+	Lat, Lon float64
 }
 
 // Use HTTPS to protect against MITM attacks that could leak location data
@@ -47,7 +37,6 @@ func trimCoordinates(c string) string {
 
 func FormatCoordinates(gd GeoData) Coordinates {
 	var c Coordinates
-	// Format coordinates for Forecast.io call
 	c.Latitude = trimCoordinates(strconv.FormatFloat(gd.Lat, 'f', 10, 64))
 	c.Longitude = trimCoordinates(strconv.FormatFloat(gd.Lon, 'f', 10, 64))
 	c.City = gd.City
@@ -57,31 +46,22 @@ func FormatCoordinates(gd GeoData) Coordinates {
 
 // ZipCodeResponse represents the response from zippopotam.us API
 type ZipCodeResponse struct {
-	PostCode    string `json:"post code"`
-	Country     string `json:"country"`
-	CountryAbbr string `json:"country abbreviation"`
-	Places      []struct {
+	PostCode string `json:"post code"`
+	Places   []struct {
 		PlaceName string `json:"place name"`
 		Longitude string `json:"longitude"`
-		State     string `json:"state"`
-		StateAbbr string `json:"state abbreviation"`
 		Latitude  string `json:"latitude"`
 	} `json:"places"`
 }
 
 // ipWhoResponse represents the response from the ipwho.is API
 type ipWhoResponse struct {
-	Success     bool    `json:"success"`
-	Message     string  `json:"message"`
-	IP          string  `json:"ip"`
-	Country     string  `json:"country"`
-	CountryCode string  `json:"country_code"`
-	Region      string  `json:"region"`
-	RegionCode  string  `json:"region_code"`
-	City        string  `json:"city"`
-	Postal      string  `json:"postal"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
+	Success   bool    `json:"success"`
+	Message   string  `json:"message"`
+	City      string  `json:"city"`
+	Postal    string  `json:"postal"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
 // GetGeoData dials the ipwho.is server to obtain geolocation data
@@ -113,18 +93,7 @@ func GetGeoData(addr string) (GeoData, error) {
 		return gd, fmt.Errorf("geolocation service could not determine location from your IP address: %s", ipResp.Message)
 	}
 
-	// Convert to GeoData format
-	gd.Status = "success"
-	gd.Country = ipResp.Country
-	gd.CountryCode = ipResp.CountryCode
-	gd.Region = ipResp.RegionCode
-	gd.RegionName = ipResp.Region
-	gd.City = ipResp.City
-	gd.Zip = ipResp.Postal
-	gd.Lat = ipResp.Latitude
-	gd.Lon = ipResp.Longitude
-	gd.Query = ipResp.IP
-	return gd, nil
+	return GeoData{City: ipResp.City, Zip: ipResp.Postal, Lat: ipResp.Latitude, Lon: ipResp.Longitude}, nil
 }
 
 // ValidateZip reports whether zip is a 5-digit US zip code, with a hint for ZIP+4.
@@ -161,7 +130,6 @@ func GetGeoDataFromZip(zipCode string) (GeoData, error) {
 	}
 	defer resp.Body.Close()
 
-	// Check HTTP status
 	if resp.StatusCode == 404 {
 		return gd, fmt.Errorf("zip code %s was not found; check that it is a valid US zip code", zipCode)
 	}
@@ -179,17 +147,7 @@ func GetGeoDataFromZip(zipCode string) (GeoData, error) {
 		return gd, fmt.Errorf("no location data found for zip code %s", zipCode)
 	}
 
-	// Convert to GeoData format
 	place := zipResp.Places[0]
-	gd.Status = "success"
-	gd.Country = zipResp.Country
-	gd.CountryCode = zipResp.CountryAbbr
-	gd.Region = place.StateAbbr
-	gd.RegionName = place.State
-	gd.City = place.PlaceName
-	gd.Zip = zipResp.PostCode
-
-	// Parse coordinates
 	lat, err := strconv.ParseFloat(place.Latitude, 64)
 	if err != nil {
 		return gd, fmt.Errorf("invalid latitude data in zip code response: %w", err)
@@ -199,8 +157,5 @@ func GetGeoDataFromZip(zipCode string) (GeoData, error) {
 		return gd, fmt.Errorf("invalid longitude data in zip code response: %w", err)
 	}
 
-	gd.Lat = lat
-	gd.Lon = lon
-
-	return gd, nil
+	return GeoData{City: place.PlaceName, Zip: zipResp.PostCode, Lat: lat, Lon: lon}, nil
 }

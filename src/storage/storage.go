@@ -109,45 +109,28 @@ func CreateConfig(path, anak string) error {
 	return saveJSON(path, Config{AirNowAPIKey: anak}, 0600)
 }
 
-// Exists returns whether the given file or directory exists
-func Exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return true, err
-}
-
-// Loads previous weather forecast.
-// A missing or unreadable cache is an error for the caller to handle, not a fatal one.
-func LoadSavedWeather(path string) (weather.Forecast, error) {
-	var f weather.Forecast
+// loadJSON reads a cached file. A missing or unreadable cache is an error for the caller
+// to handle, not a fatal one.
+func loadJSON[T any](path string) (T, error) {
+	var v T
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return f, err
+		return v, err
 	}
-	if err := json.Unmarshal(b, &f); err != nil {
-		return f, fmt.Errorf("reading cached forecast %s: %w", path, err)
+	if err := json.Unmarshal(b, &v); err != nil {
+		return v, fmt.Errorf("reading cached %s: %w", path, err)
 	}
-	return f, nil
+	return v, nil
 }
 
-// Loads previous air quality forecast.
-// A missing or unreadable cache is an error for the caller to handle, not a fatal one.
-func LoadSavedAir(path string) ([]air.Forecast, error) {
-	var f []air.Forecast
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return f, err
-	}
-	if err := json.Unmarshal(b, &f); err != nil {
-		return f, fmt.Errorf("reading cached forecast %s: %w", path, err)
-	}
-	return f, nil
-}
+// LoadSavedWeather loads the cached weather forecast.
+func LoadSavedWeather(path string) (weather.Forecast, error) { return loadJSON[weather.Forecast](path) }
+
+// LoadSavedAir loads the cached air quality forecast.
+func LoadSavedAir(path string) ([]air.Forecast, error) { return loadJSON[[]air.Forecast](path) }
+
+// LoadCallInfo loads the call info that says when and where the cache was fetched.
+func LoadCallInfo(path string) (APICallInfo, error) { return loadJSON[APICallInfo](path) }
 
 // GetConfig loads API keys and settings from the config file.
 func GetConfig(path string) (Config, error) {
@@ -184,7 +167,7 @@ func InitializeAppConfig() (AppConfig, error) {
 	}
 
 	configFile := appConfig.ConfigFile()
-	if exists, _ := Exists(configFile); !exists {
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		moved, err := migrateLegacyConfig(configFile)
 		if err != nil {
 			return appConfig, err
@@ -244,34 +227,13 @@ func SaveForecasts(a AppConfig, c geolocation.Coordinates, byIP bool, wf weather
 	if err := os.Remove(callFile); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := SaveWeatherForecast(a.CacheFile(SavedWeatherFileName), wf); err != nil {
+	if err := saveJSON(a.CacheFile(SavedWeatherFileName), wf, 0644); err != nil {
 		return err
 	}
-	if err := SaveAirForecast(a.CacheFile(SavedAirFileName), af); err != nil {
+	if err := saveJSON(a.CacheFile(SavedAirFileName), af, 0644); err != nil {
 		return err
 	}
-	return UpdateLastCall(c, byIP, callFile)
-}
-
-// UpdateLastCall records when and where forecasts were last fetched.
-// Write it after the forecasts themselves, so it never points at a stale file.
-func UpdateLastCall(c geolocation.Coordinates, byIP bool, path string) error {
-	return SaveCall(path, APICallInfo{Time: time.Now(), Coordinates: c, ByIP: byIP})
-}
-
-// Loads call information to determine whether
-// to retrieve forecast from server or disk
-func LoadCallInfo(path string) (APICallInfo, error) {
-	var lastCall APICallInfo
-	f, err := os.ReadFile(path)
-	if err != nil {
-		return lastCall, err
-	}
-	err = json.Unmarshal(f, &lastCall)
-	if err != nil {
-		return lastCall, err
-	}
-	return lastCall, nil
+	return SaveCall(callFile, APICallInfo{Time: time.Now(), Coordinates: c, ByIP: byIP})
 }
 
 // SaveCall saves info for future calls.
@@ -281,7 +243,6 @@ func SaveCall(path string, info APICallInfo) error {
 }
 
 // saveJSON marshals data to JSON and saves it to a file.
-// Returns error if marshalling or writing fails.
 func saveJSON(path string, data any, perm os.FileMode) error {
 	content, err := json.Marshal(data)
 	if err != nil {
@@ -315,14 +276,4 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
-}
-
-// SaveWeatherForecast caches a weather forecast.
-func SaveWeatherForecast(path string, f weather.Forecast) error {
-	return saveJSON(path, f, 0644)
-}
-
-// SaveAirForecast caches an air quality forecast.
-func SaveAirForecast(path string, a []air.Forecast) error {
-	return saveJSON(path, a, 0644)
 }

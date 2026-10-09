@@ -30,13 +30,11 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 
 		fmt.Println(AlertHeadline(alert.Title))
 
-		// Show onset time (when alert begins)
 		if alert.Time > 0 {
 			onsetTime := time.Unix(int64(alert.Time), 0)
 			fmt.Fprintf(TW, "Effective:\t%s\n", onsetTime.Format("Mon Jan 2, 15:04 MST"))
 		}
 
-		// Show expiration time
 		if alert.Expires > 0 {
 			expiryTime := time.Unix(int64(alert.Expires), 0)
 			fmt.Fprintf(TW, "Expires:\t%s\n", expiryTime.Format("Mon Jan 2, 15:04 MST"))
@@ -50,11 +48,6 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 			if left := time.Unix(int64(alert.Expires), 0).Sub(now); left > 0 {
 				fmt.Fprintf(TW, "Time Remaining:\t%s\n", hoursMinutes(left))
 			}
-		}
-
-		// Show URI if available
-		if alert.URI != "" {
-			fmt.Fprintf(TW, "More Info:\t%s\n", alert.URI)
 		}
 
 		printAlertSections(alert.Description, "Time Remaining:")

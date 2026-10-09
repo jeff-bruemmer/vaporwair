@@ -313,7 +313,6 @@ func printUsage(w io.Writer, fs *flag.FlagSet) {
 }
 
 // setupConfiguration initializes the configuration directory and loads API keys.
-// Returns the application configuration or an error if setup fails.
 func setupConfiguration() (storage.AppConfig, error) {
 	appConfig, err := storage.InitializeAppConfig()
 	if err != nil {
@@ -338,7 +337,6 @@ func setupConfiguration() (storage.AppConfig, error) {
 }
 
 // fetchForecasts retrieves weather and air quality forecasts for given coordinates.
-// Returns weather forecast and air quality forecast.
 func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weather.Forecast, []air.Forecast, error) {
 	type airResult struct {
 		forecast []air.Forecast
@@ -348,7 +346,6 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 	airChan := make(chan airResult, 1)
 	errChan := make(chan error, 2)
 
-	// Fetch weather forecast
 	go func() {
 		forecast, err := weather.GetNOAAWeatherForecast(coords)
 		if err != nil {
@@ -358,7 +355,6 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 		weatherChan <- forecast
 	}()
 
-	// Fetch air quality forecast
 	go func() {
 		if config.AirNowAPIKey != "" && coords.Zip != "" {
 			anURL := air.BuildAirNowURL(air.AirNowAddress, coords.Zip, config.AirNowAPIKey)
@@ -373,7 +369,6 @@ func fetchForecasts(coords geolocation.Coordinates, config storage.Config) (weat
 		}
 	}()
 
-	// Wait for results with timeout
 	select {
 	case err := <-errChan:
 		return weather.Forecast{}, nil, err

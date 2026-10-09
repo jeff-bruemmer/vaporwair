@@ -79,148 +79,53 @@ func TestGetConfigInvalidJSON(t *testing.T) {
 	}
 }
 
-// Weather forecast serialization round-trips through the cache.
-func TestSaveAndLoadWeatherForecast(t *testing.T) {
-	forecastPath := filepath.Join(t.TempDir(), SavedWeatherFileName)
-
-	sampleForecast := weather.Forecast{
-		Latitude:  40.7128,
-		Longitude: -74.0060,
-		Timezone:  "America/New_York",
-		Currently: weather.DataPoint{
-			Time:                float64(time.Now().Unix()),
-			Temperature:         72.5,
-			ApparentTemperature: 75.0,
-			Humidity:            0.65,
-			WindSpeed:           10.5,
-			Summary:             "Partly Cloudy",
-			PrecipProbability:   0.20,
-		},
-		Hourly: weather.DataBlock{
-			Summary: "Partly cloudy for the hour",
-			Data: []weather.DataPoint{
-				{Time: 1730000000, Temperature: 72},
-				{Time: 1730003600, Temperature: 71},
-			},
-		},
-		Daily: weather.DataBlock{
-			Summary: "Partly cloudy throughout the week",
-			Data: []weather.DataPoint{
-				{Time: 1730000000, TemperatureMax: 75, TemperatureMin: 60},
-			},
-		},
-		Alerts: []weather.Alert{},
+// Forecasts and call info round-trip through the cache, including whether the location
+// came from IP lookup.
+func TestSaveForecastsRoundTrip(t *testing.T) {
+	a := AppConfig{CacheDir: t.TempDir()}
+	coords := geolocation.Coordinates{Latitude: "40.7128", Longitude: "-74.0060", City: "New York", Zip: "10001"}
+	wf := weather.Forecast{
+		Latitude: 40.7128,
+		Timezone: "America/New_York",
+		Hourly:   weather.DataBlock{Data: []weather.DataPoint{{Time: 1730000000, Temperature: 72}, {Time: 1730003600, Temperature: 71}}},
+		Daily:    weather.DataBlock{Data: []weather.DataPoint{{Time: 1730000000, TemperatureMax: 75, TemperatureMin: 60}}},
+	}
+	af := []air.Forecast{
+		{DateForecast: "2025-11-01", ParameterName: "O3", AQI: 55, Category: air.Category{Number: 2, Name: "Moderate"}},
+		{DateForecast: "2025-11-01", ParameterName: "PM2.5", AQI: 35, Category: air.Category{Number: 1, Name: "Good"}},
 	}
 
-	if err := SaveWeatherForecast(forecastPath, sampleForecast); err != nil {
-		t.Fatalf("SaveWeatherForecast failed: %v", err)
+	before := time.Now()
+	if err := SaveForecasts(a, coords, true, wf, af); err != nil {
+		t.Fatal(err)
 	}
+	after := time.Now()
 
-	loaded, err := LoadSavedWeather(forecastPath)
+	gotW, err := LoadSavedWeather(a.CacheFile(SavedWeatherFileName))
 	if err != nil {
-		t.Fatalf("LoadSavedWeather failed: %v", err)
+		t.Fatal(err)
+	}
+	if gotW.Latitude != wf.Latitude || gotW.Timezone != wf.Timezone || len(gotW.Hourly.Data) != 2 || gotW.Daily.Data[0].TemperatureMin != 60 {
+		t.Errorf("weather = %+v, want %+v", gotW, wf)
 	}
 
-	if loaded.Latitude != sampleForecast.Latitude {
-		t.Errorf("Latitude mismatch: got %f, want %f", loaded.Latitude, sampleForecast.Latitude)
-	}
-	if loaded.Longitude != sampleForecast.Longitude {
-		t.Errorf("Longitude mismatch: got %f, want %f", loaded.Longitude, sampleForecast.Longitude)
-	}
-	if loaded.Timezone != sampleForecast.Timezone {
-		t.Errorf("Timezone mismatch: got %s, want %s", loaded.Timezone, sampleForecast.Timezone)
-	}
-	if loaded.Currently.Temperature != sampleForecast.Currently.Temperature {
-		t.Errorf("Current temperature mismatch: got %f, want %f",
-			loaded.Currently.Temperature, sampleForecast.Currently.Temperature)
-	}
-	if len(loaded.Hourly.Data) != len(sampleForecast.Hourly.Data) {
-		t.Errorf("Hourly data count mismatch: got %d, want %d",
-			len(loaded.Hourly.Data), len(sampleForecast.Hourly.Data))
-	}
-	if len(loaded.Daily.Data) != len(sampleForecast.Daily.Data) {
-		t.Errorf("Daily data count mismatch: got %d, want %d",
-			len(loaded.Daily.Data), len(sampleForecast.Daily.Data))
-	}
-}
-
-// Air quality forecasts round-trip through the cache.
-func TestSaveAndLoadAirForecast(t *testing.T) {
-	airPath := filepath.Join(t.TempDir(), SavedAirFileName)
-
-	sampleAir := []air.Forecast{
-		{
-			DateForecast:  "2025-11-01",
-			ReportingArea: "Test Area",
-			StateCode:     "NY",
-			Latitude:      40.7128,
-			Longitude:     -74.0060,
-			ParameterName: "O3",
-			AQI:           55,
-			Category:      air.Category{Number: 2, Name: "Moderate"},
-		},
-		{
-			DateForecast:  "2025-11-01",
-			ReportingArea: "Test Area",
-			StateCode:     "NY",
-			ParameterName: "PM2.5",
-			AQI:           35,
-			Category:      air.Category{Number: 1, Name: "Good"},
-		},
-	}
-
-	if err := SaveAirForecast(airPath, sampleAir); err != nil {
-		t.Fatalf("SaveAirForecast failed: %v", err)
-	}
-
-	loaded, err := LoadSavedAir(airPath)
+	gotA, err := LoadSavedAir(a.CacheFile(SavedAirFileName))
 	if err != nil {
-		t.Fatalf("LoadSavedAir failed: %v", err)
+		t.Fatal(err)
 	}
-	if len(loaded) != len(sampleAir) {
-		t.Fatalf("Air forecast count mismatch: got %d, want %d", len(loaded), len(sampleAir))
-	}
-	for i, forecast := range loaded {
-		if forecast.ParameterName != sampleAir[i].ParameterName {
-			t.Errorf("Parameter name mismatch at index %d: got %s, want %s",
-				i, forecast.ParameterName, sampleAir[i].ParameterName)
-		}
-		if forecast.AQI != sampleAir[i].AQI {
-			t.Errorf("AQI mismatch at index %d: got %d, want %d",
-				i, forecast.AQI, sampleAir[i].AQI)
-		}
-	}
-}
-
-// Cache metadata round-trips, including whether the location came from IP lookup.
-func TestUpdateAndLoadCallInfo(t *testing.T) {
-	callPath := filepath.Join(t.TempDir(), SavedCallFileName)
-	coords := geolocation.Coordinates{
-		Latitude:  "40.7128",
-		Longitude: "-74.0060",
-		City:      "New York",
-		Zip:       "10001",
+	if len(gotA) != 2 || gotA[1].ParameterName != "PM2.5" || gotA[1].AQI != 35 {
+		t.Errorf("air = %+v, want %+v", gotA, af)
 	}
 
-	beforeTime := time.Now()
-	if err := UpdateLastCall(coords, true, callPath); err != nil {
-		t.Fatalf("UpdateLastCall failed: %v", err)
-	}
-	afterTime := time.Now()
-
-	loaded, err := LoadCallInfo(callPath)
+	pc, err := LoadCallInfo(a.CacheFile(SavedCallFileName))
 	if err != nil {
-		t.Fatalf("LoadCallInfo failed: %v", err)
+		t.Fatal(err)
 	}
-	if loaded.Coordinates != coords {
-		t.Errorf("Coordinates mismatch: got %+v, want %+v", loaded.Coordinates, coords)
+	if pc.Coordinates != coords || !pc.ByIP {
+		t.Errorf("call info = %+v, want %+v by IP", pc, coords)
 	}
-	if !loaded.ByIP {
-		t.Error("ByIP was not saved")
-	}
-	if loaded.Time.Before(beforeTime) || loaded.Time.After(afterTime) {
-		t.Errorf("Timestamp out of bounds: got %v, want between %v and %v",
-			loaded.Time, beforeTime, afterTime)
+	if pc.Time.Before(before) || pc.Time.After(after) {
+		t.Errorf("call time %v, want between %v and %v", pc.Time, before, after)
 	}
 }
 
@@ -243,11 +148,11 @@ func TestFilePermissions(t *testing.T) {
 		t.Errorf("Config file has insecure permissions: got %#o, want 0600 (owner-only)", perm)
 	}
 
-	forecastPath := filepath.Join(dir, SavedWeatherFileName)
-	if err := SaveWeatherForecast(forecastPath, weather.Forecast{Latitude: 40.7128}); err != nil {
+	a := AppConfig{CacheDir: dir}
+	if err := SaveForecasts(a, geolocation.Coordinates{}, false, weather.Forecast{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	fileInfo, err = os.Stat(forecastPath)
+	fileInfo, err = os.Stat(a.CacheFile(SavedWeatherFileName))
 	if err != nil {
 		t.Fatalf("Failed to stat forecast file: %v", err)
 	}
@@ -327,19 +232,6 @@ func TestWriteFileAtomic(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("directory has %d entries, want only file.json", len(entries))
-	}
-}
-
-func TestExists(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "file")
-	if err := os.WriteFile(path, nil, 0644); err != nil {
-		t.Fatal(err)
-	}
-	if exists, err := Exists(path); err != nil || !exists {
-		t.Errorf("Exists(existing) = %v, %v", exists, err)
-	}
-	if exists, err := Exists("/nonexistent/path/file.txt"); err != nil || exists {
-		t.Errorf("Exists(missing) = %v, %v", exists, err)
 	}
 }
 
