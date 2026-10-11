@@ -173,7 +173,7 @@ func zipCoordinates(appConfig storage.AppConfig, zip string) (geolocation.Coordi
 	if err == nil && !pc.ByIP && pc.Coordinates.Zip == zip && pc.Coordinates.Latitude != "" && pc.Coordinates.Longitude != "" {
 		return pc.Coordinates, nil
 	}
-	geoData, err := geolocation.GetGeoDataFromZip(zip)
+	geoData, err := geolocation.GetGeoDataFromZip(geolocation.ZipCodeAPIAddress, zip)
 	if err != nil {
 		return geolocation.Coordinates{}, err
 	}
@@ -440,6 +440,10 @@ func loadCachedForecasts(appConfig storage.AppConfig, stale bool) (storage.APICa
 // data instead of its text. A zero cachedAt means the forecast was just fetched; stale
 // marks an expired cache.
 func render(t time.Time, c geolocation.Coordinates, cachedAt time.Time, stale bool, wf weather.Forecast, af []air.Forecast) {
+	// The alerts report says so itself; elsewhere a missing section would read as none.
+	if wf.AlertsUnavailable && selected.name != "alerts" {
+		notes = append(notes, "Weather alerts unavailable; run vaporwair alerts -refresh to check again")
+	}
 	wf, af = report.DropPast(wf, af, t)
 	if jsonOutput {
 		printJSON(t, c, cachedAt, stale, wf, af)

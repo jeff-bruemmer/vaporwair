@@ -61,9 +61,13 @@ type Forecast struct {
 	Hourly    DataBlock `json:"hourly"`
 	Daily     DataBlock `json:"daily"`
 	Alerts    []Alert   `json:"alerts"`
+	// AlertsUnavailable marks a forecast whose alerts request failed, so no alerts
+	// means "could not check" rather than "none active".
+	AlertsUnavailable bool `json:"alertsUnavailable,omitempty"`
 }
 
-const NOAABaseURL = "https://api.weather.gov"
+// NOAABaseURL is the NWS API root. It is a var so tests can point it at a fake server.
+var NOAABaseURL = "https://api.weather.gov"
 
 // noaaTimeout bounds each NOAA request the forecast needs.
 const noaaTimeout = 10 * time.Second
@@ -119,6 +123,7 @@ type NOAAPointsProperties struct {
 	Forecast            string `json:"forecast"`
 	ForecastHourly      string `json:"forecastHourly"`
 	ObservationStations string `json:"observationStations"`
+	TimeZone            string `json:"timeZone"` // IANA name, e.g. "America/Chicago"
 }
 
 type NOAAForecastResponse struct {
@@ -280,37 +285,13 @@ func GetNOAAForecast(forecastURL string) (NOAAForecastResponse, error) {
 	return forecast, nil
 }
 
-// getTimezoneFromCoordinates estimates timezone based on longitude for US locations.
-// This is a simplified approximation - a full implementation would use a timezone database.
-func getTimezoneFromCoordinates(lat, lon float64) string {
-	switch {
-	case lon > -87.5:
-		return "America/New_York" // Eastern
-	case lon > -101.5:
-		return "America/Chicago" // Central
-	case lon > -115:
-		return "America/Denver" // Mountain
-	case lon > -125:
-		return "America/Los_Angeles" // Pacific
-	default:
-		// Alaska, Hawaii, or outside continental US
-		if lat > 50 {
-			return "America/Anchorage" // Alaska
-		} else if lat < 25 {
-			return "Pacific/Honolulu" // Hawaii
-		}
-		return "America/New_York" // Default fallback
-	}
-}
-
 // ConvertNOAAToForecast converts NOAA API response to our Forecast structure.
+// The caller sets Timezone and Alerts, which come from other requests.
 func ConvertNOAAToForecast(dailyForecast NOAAForecastResponse, hourlyForecast NOAAForecastResponse, c geolocation.Coordinates) Forecast {
 	var forecast Forecast
 
 	forecast.Latitude = parseFloat(c.Latitude)
 	forecast.Longitude = parseFloat(c.Longitude)
-	// Estimate timezone from coordinates (NOAA doesn't provide timezone)
-	forecast.Timezone = getTimezoneFromCoordinates(forecast.Latitude, forecast.Longitude)
 
 	if len(hourlyForecast.Properties.Periods) > 0 {
 		forecast.Currently = convertNOAAPeriodToDataPoint(hourlyForecast.Properties.Periods[0])
@@ -452,20 +433,23 @@ func celsiusToFahrenheit(c float64) float64 {
 	return (c * 9.0 / 5.0) + 32.0
 }
 
-// GetNOAAAlerts retrieves active weather alerts for coordinates. Alerts are optional,
-// so any failure returns none.
-func GetNOAAAlerts(c geolocation.Coordinates) []Alert {
+// GetNOAAAlerts retrieves active weather alerts for coordinates. An error means the
+// alerts could not be checked, which callers must not report as no alerts.
+func GetNOAAAlerts(c geolocation.Coordinates) ([]Alert, error) {
 	url := fmt.Sprintf("%s/alerts/active?point=%s,%s", NOAABaseURL, c.Latitude, c.Longitude)
 
 	resp, err := dialer.Get(url, noaaOptionalTimeout)
 	if err != nil {
-		return []Alert{}
+		return nil, err
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("NOAA alerts returned error status %d", resp.StatusCode)
+	}
 	var alertResp NOAAAlertResponse
-	if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&alertResp) != nil {
-		return []Alert{}
+	if err := json.NewDecoder(resp.Body).Decode(&alertResp); err != nil {
+		return nil, fmt.Errorf("failed to parse NOAA alerts response: %w", err)
 	}
 
 	alerts := make([]Alert, 0)
@@ -487,7 +471,7 @@ func GetNOAAAlerts(c geolocation.Coordinates) []Alert {
 			Expires:     expires,
 		})
 	}
-	return alerts
+	return alerts, nil
 }
 
 // GetNOAAObservation retrieves current observation data for pressure and visibility.
@@ -546,11 +530,11 @@ func GetNOAAWeatherForecast(c geolocation.Coordinates) (Forecast, error) {
 
 	// The rest only need the grid point, so they run at once.
 	var (
-		wg                            sync.WaitGroup
-		dailyForecast, hourlyForecast NOAAForecastResponse
-		dailyErr, hourlyErr           error
-		alerts                        []Alert
-		observation                   NOAAObservationProperties
+		wg                             sync.WaitGroup
+		dailyForecast, hourlyForecast  NOAAForecastResponse
+		dailyErr, hourlyErr, alertsErr error
+		alerts                         []Alert
+		observation                    NOAAObservationProperties
 	)
 	wg.Add(4)
 	go func() {
@@ -562,8 +546,9 @@ func GetNOAAWeatherForecast(c geolocation.Coordinates) (Forecast, error) {
 		hourlyForecast, hourlyErr = GetNOAAForecast(points.Properties.ForecastHourly)
 	}()
 	go func() {
+		// Alerts are optional: a failure is flagged on the forecast, not returned
 		defer wg.Done()
-		alerts = GetNOAAAlerts(c)
+		alerts, alertsErr = GetNOAAAlerts(c)
 	}()
 	go func() {
 		// Observation data for pressure and visibility is optional
@@ -578,7 +563,9 @@ func GetNOAAWeatherForecast(c geolocation.Coordinates) (Forecast, error) {
 	}
 
 	forecast := ConvertNOAAToForecast(dailyForecast, hourlyForecast, c)
+	forecast.Timezone = points.Properties.TimeZone
 	forecast.Alerts = alerts
+	forecast.AlertsUnavailable = alertsErr != nil
 
 	// The observation is live, so only today gets pressure and visibility.
 	if len(forecast.Daily.Data) > 0 {

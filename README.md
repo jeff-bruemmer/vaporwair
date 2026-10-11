@@ -363,7 +363,8 @@ Vaporwair sends nothing else, and collects no analytics.
 2. When the cache is expired or missing, Vaporwair:
    - Determines your coordinates, reusing the ones saved for your zip code when it has them
    - Asks NOAA for the forecast grid point, then fetches the daily forecast, hourly forecast, alerts, and current observations concurrently, alongside AirNow
-   - Gives each request 10 seconds, and the weather forecast 30 seconds in all
+   - Gives each request up to 10 seconds, and the weather forecast 30 seconds in all
+   - Shows the forecast even when the alerts request fails, with a note that alerts could not be checked
    - Displays results once all data is retrieved
 
 3. Cached forecasts are location-aware: asking for a different zip code, or using `-current`, fetches fresh data.

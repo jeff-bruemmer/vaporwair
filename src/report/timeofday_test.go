@@ -241,6 +241,17 @@ func TestAlertsReportBeforeOnset(t *testing.T) {
 	}
 }
 
+// A failed alerts request must not read as "no alerts".
+func TestAlertsReportWhenUnavailable(t *testing.T) {
+	withClock(t, at(19, 11))
+	w := eveningForecast()
+	w.Alerts, w.AlertsUnavailable = nil, true
+	out := capture(t, func() { WeatherAlertsReport(w, nil) })
+	if !strings.Contains(out, "Could not check for weather alerts") || strings.Contains(out, "No active") {
+		t.Errorf("alerts report should say the check failed, not that there are none:\n%s", out)
+	}
+}
+
 func TestBringListReadsAsPhrase(t *testing.T) {
 	got := strings.Join(sentenceList([]string{"Winter hat or beanie", "Gloves or mittens", "Scarf"}), ", ")
 	if want := "Winter hat or beanie, gloves or mittens, scarf"; got != want {

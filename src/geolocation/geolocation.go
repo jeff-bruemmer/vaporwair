@@ -116,15 +116,16 @@ func isDigits(s string) bool {
 	return s != ""
 }
 
-// GetGeoDataFromZip retrieves geolocation data from a US zip code.
-func GetGeoDataFromZip(zipCode string) (GeoData, error) {
+// GetGeoDataFromZip dials the zip code server at addr to obtain geolocation data
+// for a US zip code.
+func GetGeoDataFromZip(addr, zipCode string) (GeoData, error) {
 	var gd GeoData
 
 	if err := ValidateZip(zipCode); err != nil {
 		return gd, err
 	}
 
-	resp, err := dialer.Get(ZipCodeAPIAddress+zipCode, 5*time.Second)
+	resp, err := dialer.Get(addr+zipCode, 5*time.Second)
 	if err != nil {
 		return gd, err
 	}

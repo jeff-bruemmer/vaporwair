@@ -1,7 +1,11 @@
 package weather
 
 import (
+	"encoding/json"
 	"github.com/jeff-bruemmer/vaporwair/src/geolocation"
+	"math"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -176,6 +180,104 @@ func TestConvertNOAAToForecast(t *testing.T) {
 	if len(forecast.Daily.Data) != 1 {
 		t.Errorf("Expected 1 daily data point, got %d", len(forecast.Daily.Data))
 	}
+}
+
+// fakeNOAA points NOAABaseURL at a server answering every request GetNOAAWeatherForecast
+// makes, except the path fail, which gets a 500.
+func fakeNOAA(t *testing.T, fail string) {
+	t.Helper()
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == fail {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		pressure, visibility := 101325.0, 16093.44 // Pa and meters, as NOAA reports them
+		var body any
+		switch r.URL.Path {
+		case "/points/44.4759,-73.2121":
+			body = NOAAPointsResponse{Properties: NOAAPointsProperties{
+				Forecast:            server.URL + "/gridpoints/BTV/1,2/forecast",
+				ForecastHourly:      server.URL + "/gridpoints/BTV/1,2/forecast/hourly",
+				ObservationStations: server.URL + "/gridpoints/BTV/1,2/stations",
+				TimeZone:            "America/Chicago",
+			}}
+		case "/gridpoints/BTV/1,2/forecast":
+			body = getSampleNOAADailyForecastDayFirst()
+		case "/gridpoints/BTV/1,2/forecast/hourly":
+			body = getSampleNOAAHourlyForecast()
+		case "/alerts/active":
+			body = NOAAAlertResponse{Features: []NOAAAlertFeature{{Properties: NOAAAlertProperties{
+				Event:       "Frost Advisory",
+				Description: "* WHAT...Frost.",
+				Onset:       "2025-10-25T00:00:00-04:00",
+				Expires:     "2025-10-25T07:00:00-04:00",
+			}}}}
+		case "/gridpoints/BTV/1,2/stations":
+			body = NOAAStationsResponse{Features: []NOAAStationFeature{{Properties: NOAAStationProperties{StationIdentifier: "KBTV"}}}}
+		case "/stations/KBTV/observations/latest":
+			body = NOAAObservationResponse{Properties: NOAAObservationProperties{
+				BarometricPressure: NOAAValue{Value: &pressure},
+				Visibility:         NOAAValue{Value: &visibility},
+			}}
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		json.NewEncoder(w).Encode(body)
+	}))
+	old := NOAABaseURL
+	NOAABaseURL = server.URL
+	t.Cleanup(func() {
+		NOAABaseURL = old
+		server.Close()
+	})
+}
+
+func TestGetNOAAWeatherForecast(t *testing.T) {
+	coords := geolocation.Coordinates{Latitude: "44.4759", Longitude: "-73.2121"}
+
+	t.Run("all requests answered", func(t *testing.T) {
+		fakeNOAA(t, "")
+		f, err := GetNOAAWeatherForecast(coords)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.Timezone != "America/Chicago" {
+			t.Errorf("Timezone = %q, want NOAA's America/Chicago", f.Timezone)
+		}
+		if len(f.Daily.Data) == 0 || len(f.Hourly.Data) != 2 {
+			t.Fatalf("got %d days and %d hours, want 1 and 2", len(f.Daily.Data), len(f.Hourly.Data))
+		}
+		if today := f.Daily.Data[0]; math.Abs(today.Pressure-29.92) > 0.01 || math.Abs(today.Visibility-10) > 0.01 {
+			t.Errorf("pressure %.3f inHg, visibility %.3f miles; want 29.92 and 10", today.Pressure, today.Visibility)
+		}
+		if len(f.Alerts) != 1 || f.Alerts[0].Title != "Frost Advisory" || f.Alerts[0].Time == 0 || f.Alerts[0].Expires == 0 {
+			t.Errorf("alerts = %+v, want the frost advisory with onset and expiry", f.Alerts)
+		}
+		if f.AlertsUnavailable {
+			t.Error("AlertsUnavailable set though the alerts request succeeded")
+		}
+	})
+
+	// Alerts are optional: the forecast still comes back, flagged so no alerts isn't read as none.
+	t.Run("alerts fail", func(t *testing.T) {
+		fakeNOAA(t, "/alerts/active")
+		f, err := GetNOAAWeatherForecast(coords)
+		if err != nil {
+			t.Fatalf("a failed alerts request failed the forecast: %v", err)
+		}
+		if !f.AlertsUnavailable || len(f.Alerts) != 0 {
+			t.Errorf("AlertsUnavailable = %v with %d alerts; want true and none", f.AlertsUnavailable, len(f.Alerts))
+		}
+	})
+
+	t.Run("forecast fails", func(t *testing.T) {
+		fakeNOAA(t, "/gridpoints/BTV/1,2/forecast")
+		if _, err := GetNOAAWeatherForecast(coords); err == nil {
+			t.Error("want an error when the daily forecast fails")
+		}
+	})
 }
 
 func TestConvertNOAADailyPeriodsToDataBlock_DayFirst(t *testing.T) {
@@ -634,34 +736,6 @@ func TestWindGustParsing(t *testing.T) {
 			t.Errorf("parseWindGust(%v) = %.1f, expected %.1f",
 				test.gustString, result, test.expectedGust)
 		}
-	}
-}
-
-func TestTimezoneDetection(t *testing.T) {
-	tests := []struct {
-		name     string
-		lat      float64
-		lon      float64
-		expected string
-	}{
-		{"New York (Eastern)", 40.7128, -74.0060, "America/New_York"},
-		{"Chicago (Central)", 41.8781, -87.6298, "America/Chicago"},
-		{"Denver (Mountain)", 39.7392, -104.9903, "America/Denver"},
-		{"Los Angeles (Pacific)", 34.0522, -118.2437, "America/Los_Angeles"},
-		{"Anchorage (Alaska)", 61.2181, -149.9003, "America/Anchorage"},
-		{"Honolulu (Hawaii)", 21.3099, -157.8581, "Pacific/Honolulu"},
-		{"Miami (Eastern)", 25.7617, -80.1918, "America/New_York"},
-		{"Seattle (Pacific)", 47.6062, -122.3321, "America/Los_Angeles"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result := getTimezoneFromCoordinates(test.lat, test.lon)
-			if result != test.expected {
-				t.Errorf("getTimezoneFromCoordinates(%.4f, %.4f) = %s, expected %s",
-					test.lat, test.lon, result, test.expected)
-			}
-		})
 	}
 }
 
