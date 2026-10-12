@@ -75,4 +75,12 @@ func TestJSONNulls(t *testing.T) {
 			t.Errorf("summary JSON missing %s:\n%s", want, b)
 		}
 	}
+
+	// A failed alerts check is null, not [], which would read as none active.
+	w.AlertsUnavailable = true
+	for name, data := range map[string]map[string]any{"alerts": AlertsData(w, nil), "summary": SummaryData(w, nil), "insights": InsightsData(w, nil)} {
+		if b, err := json.Marshal(data); err != nil || !strings.Contains(string(b), `"alerts":null`) {
+			t.Errorf("%s JSON with alerts unavailable should have \"alerts\":null (err %v):\n%s", name, err, b)
+		}
+	}
 }

@@ -87,7 +87,7 @@ func InsightsData(w weather.Forecast, a []air.Forecast) map[string]any {
 		"today":     todayJSON(w),
 		"outfit":    outfitJSON(w, a),
 		"hours":     hoursJSON(futureHours(w, DefaultMaxHours)),
-		"alerts":    alertsJSON(w.Alerts),
+		"alerts":    alertsJSON(w),
 		"aqi_today": aqiTodayJSON(a),
 	}
 }
@@ -98,7 +98,7 @@ func SummaryData(w weather.Forecast, a []air.Forecast) map[string]any {
 		"now":       nowJSON(w),
 		"today":     todayJSON(w),
 		"outfit":    outfitJSON(w, a),
-		"alerts":    alertsJSON(w.Alerts),
+		"alerts":    alertsJSON(w),
 		"aqi_today": aqiTodayJSON(a),
 	}
 }
@@ -119,7 +119,7 @@ func DaysData(w weather.Forecast, a []air.Forecast) map[string]any {
 
 // AlertsData is the alerts report's data for -json.
 func AlertsData(w weather.Forecast, a []air.Forecast) map[string]any {
-	return map[string]any{"alerts": alertsJSON(w.Alerts)}
+	return map[string]any{"alerts": alertsJSON(w)}
 }
 
 // AirData is the air quality report's data for -json.
@@ -204,9 +204,14 @@ func dayJSON(d weather.DataPoint) DayJSON {
 	return day
 }
 
-func alertsJSON(alerts []weather.Alert) []AlertJSON {
+// alertsJSON is null when the alerts request failed, so a script can tell "could not
+// check" from none active, which is [].
+func alertsJSON(w weather.Forecast) []AlertJSON {
+	if w.AlertsUnavailable {
+		return nil
+	}
 	out := []AlertJSON{}
-	for _, a := range alerts {
+	for _, a := range w.Alerts {
 		out = append(out, AlertJSON{
 			Event:       a.Title,
 			Onset:       optionalTime(a.Time),

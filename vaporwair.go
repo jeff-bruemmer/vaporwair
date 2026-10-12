@@ -440,9 +440,10 @@ func loadCachedForecasts(appConfig storage.AppConfig, stale bool) (storage.APICa
 // data instead of its text. A zero cachedAt means the forecast was just fetched; stale
 // marks an expired cache.
 func render(t time.Time, c geolocation.Coordinates, cachedAt time.Time, stale bool, wf weather.Forecast, af []air.Forecast) {
-	// The alerts report says so itself; elsewhere a missing section would read as none.
-	if wf.AlertsUnavailable && selected.name != "alerts" {
-		notes = append(notes, "Weather alerts unavailable; run vaporwair alerts -refresh to check again")
+	// insights and summary leave out alerts when there are none, so without this note a
+	// failed check would read as none. The alerts report says so itself.
+	if wf.AlertsUnavailable && (selected.name == "insights" || selected.name == "summary") {
+		notes = append(notes, "Weather alerts unavailable; rerun with -refresh to check again")
 	}
 	wf, af = report.DropPast(wf, af, t)
 	if jsonOutput {

@@ -13,9 +13,9 @@ import (
 func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Weather Alerts"))
 
-	if len(w.Alerts) == 0 && w.AlertsUnavailable {
+	if w.AlertsUnavailable {
 		fmt.Println("Could not check for weather alerts.")
-		fmt.Println("Try again: vaporwair alerts -refresh")
+		fmt.Println("Try again: rerun with -refresh")
 		return
 	}
 	if len(w.Alerts) == 0 {

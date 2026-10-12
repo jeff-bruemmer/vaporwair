@@ -328,7 +328,7 @@ The objects are the same in every report. Key names carry their units, times are
 
 - **hour** (`now`, `hours`): `time`, `temp_f`, `feels_like_f`, `dewpoint_f`, `precip_pct`, `precip_type`, `humidity_pct`, `wind_mph`, `gust_mph`, `wind_dir`, `conditions`
 - **day** (`today`, `days`): `name`, `start`, `night`, `low_f`, `high_f` (null for a night period), `precip_pct`, `precip_type`, `wind_mph`, `gust_mph`, `wind_dir`, `conditions`, `forecast`, `pressure_inhg`, `visibility_mi`
-- **alert**: `event`, `onset`, `expires`, `description`
+- **alert** (`alerts`, which is `[]` when none are active and null when they could not be checked): `event`, `onset`, `expires`, `description`
 - **air**: `date`, `pollutant`, `aqi` (null until AirNow publishes it), `category`
 - **aqi_today**: `aqi`, `pollutant`, `category`, or null when there is no numeric forecast
 - **outfit**: `outfit`, `feels_like_low_f`, `feels_like_low_at`, `high_f`, `until`, `accessories`, `tips`
