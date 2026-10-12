@@ -13,6 +13,10 @@ import (
 func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Weather Alerts"))
 
+	if w.AlertsUnavailable {
+		fmt.Println(alertsUnavailable)
+		return
+	}
 	if len(w.Alerts) == 0 {
 		fmt.Println("No active weather alerts for this location.")
 		fmt.Println()

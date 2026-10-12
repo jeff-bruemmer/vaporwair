@@ -173,7 +173,7 @@ func zipCoordinates(appConfig storage.AppConfig, zip string) (geolocation.Coordi
 	if err == nil && !pc.ByIP && pc.Coordinates.Zip == zip && pc.Coordinates.Latitude != "" && pc.Coordinates.Longitude != "" {
 		return pc.Coordinates, nil
 	}
-	geoData, err := geolocation.GetGeoDataFromZip(zip)
+	geoData, err := geolocation.GetGeoDataFromZip(geolocation.ZipCodeAPIAddress, zip)
 	if err != nil {
 		return geolocation.Coordinates{}, err
 	}

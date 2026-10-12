@@ -138,7 +138,7 @@ func TestGetGeoDataFromZip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := GetGeoDataFromZip(tt.zipCode)
+			_, err := GetGeoDataFromZip(ZipCodeAPIAddress, tt.zipCode) // rejected before any request
 
 			if tt.expectError {
 				if err == nil {
@@ -151,16 +151,30 @@ func TestGetGeoDataFromZip(t *testing.T) {
 	}
 }
 
-// GetGeoDataFromZip 404 Handling
-func TestGetGeoDataFromZip404(t *testing.T) {
+// GetGeoDataFromZip with a mock zippopotam.us server
+func TestGetGeoDataFromZipWithMockServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
+		if r.URL.Path != "/us/05401" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"post code": "05401", "places": [{"place name": "Burlington", "longitude": "-73.2121", "latitude": "44.4759"}]}`))
 	}))
 	defer server.Close()
+	addr := server.URL + "/us/"
 
-	// Can't easily test this without dependency injection
-	// Documenting this as a limitation - real test would require refactoring
-	t.Skip("Skipping 404 test - would require dependency injection to test with mock server")
+	gd, err := GetGeoDataFromZip(addr, "05401")
+	if err != nil {
+		t.Fatalf("GetGeoDataFromZip failed: %v", err)
+	}
+	if want := (GeoData{City: "Burlington", Zip: "05401", Lat: 44.4759, Lon: -73.2121}); gd != want {
+		t.Errorf("got %+v, want %+v", gd, want)
+	}
+
+	if _, err := GetGeoDataFromZip(addr, "00000"); err == nil || !strings.Contains(err.Error(), "zip code 00000 was not found") {
+		t.Errorf("unknown zip: got %v, want a not-found error", err)
+	}
 }
 
 // Coordinate Formatting

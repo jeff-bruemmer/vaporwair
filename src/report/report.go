@@ -199,9 +199,19 @@ func airQualityStatus(a []air.Forecast) string {
 	return "forecast not yet available"
 }
 
+// alertsUnavailable is what the alerts sections say when the alerts request failed.
+const alertsUnavailable = "Could not check for weather alerts; rerun with -refresh"
+
 // WeatherAlerts prints a short block for each active alert: the headline with when it
-// applies, and what it is. The alerts report has the full NWS text.
+// applies, and what it is. The alerts report has the full NWS text. With no alerts the
+// section is left out, unless the check failed, which would then read as none.
 func WeatherAlerts(f weather.Forecast) {
+	if f.AlertsUnavailable {
+		fmt.Println(Title("Weather Alerts"))
+		fmt.Println(alertsUnavailable)
+		fmt.Println()
+		return
+	}
 	if len(f.Alerts) == 0 {
 		return
 	}

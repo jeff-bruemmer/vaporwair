@@ -38,6 +38,8 @@ func Summary(w weather.Forecast, a []air.Forecast) {
 			headline += fmt.Sprintf(" (+%d more)", more)
 		}
 		fmt.Fprintf(TW, formatString, "Alert", headline)
+	} else if w.AlertsUnavailable {
+		fmt.Fprintf(TW, formatString, "Alert", "could not check (rerun with -refresh)")
 	}
 	TW.Flush()
 }
