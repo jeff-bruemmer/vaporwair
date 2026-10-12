@@ -14,8 +14,7 @@ func WeatherAlertsReport(w weather.Forecast, a []air.Forecast) {
 	fmt.Println(Title("Weather Alerts"))
 
 	if w.AlertsUnavailable {
-		fmt.Println("Could not check for weather alerts.")
-		fmt.Println("Try again: rerun with -refresh")
+		fmt.Println(alertsUnavailable)
 		return
 	}
 	if len(w.Alerts) == 0 {

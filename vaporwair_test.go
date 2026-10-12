@@ -383,22 +383,3 @@ func TestPrintJSON(t *testing.T) {
 		}
 	}
 }
-
-// A failed alerts check is noted on the reports that leave out alerts when there are none,
-// where a missing section would read as no alerts. Reports without alerts get no note.
-func TestRenderNotesUnavailableAlerts(t *testing.T) {
-	now := time.Now()
-	w := weather.Forecast{AlertsUnavailable: true}
-	w.Daily.Data = []weather.DataPoint{{Time: float64(now.Unix()), PeriodName: "Today"}}
-	for _, spec := range reports {
-		setFlags(t, "", false, false)
-		selected, jsonOutput = spec, true
-		var stderr string
-		captureOutput(t, &os.Stdout, func() {
-			stderr = captureOutput(t, &os.Stderr, func() { render(now, geolocation.Coordinates{}, time.Time{}, false, w, nil) })
-		})
-		if noted := strings.Contains(stderr, "Weather alerts unavailable"); noted != (spec.name == "insights" || spec.name == "summary") {
-			t.Errorf("%s: alerts note shown = %v; stderr: %q", spec.name, noted, stderr)
-		}
-	}
-}

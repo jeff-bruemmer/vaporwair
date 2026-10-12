@@ -246,7 +246,7 @@ func TestGetNOAAWeatherForecast(t *testing.T) {
 		if f.Timezone != "America/Chicago" {
 			t.Errorf("Timezone = %q, want NOAA's America/Chicago", f.Timezone)
 		}
-		if len(f.Daily.Data) == 0 || len(f.Hourly.Data) != 2 {
+		if len(f.Daily.Data) != 1 || len(f.Hourly.Data) != 2 {
 			t.Fatalf("got %d days and %d hours, want 1 and 2", len(f.Daily.Data), len(f.Hourly.Data))
 		}
 		if today := f.Daily.Data[0]; math.Abs(today.Pressure-29.92) > 0.01 || math.Abs(today.Visibility-10) > 0.01 {
